@@ -1,2 +1,2 @@
-# gnn_graph-counting_query-matching
+# Gnn Graph Counting & Query Matching Tasks
 Graph Neural Networks for Graph Query Matching Tasks
