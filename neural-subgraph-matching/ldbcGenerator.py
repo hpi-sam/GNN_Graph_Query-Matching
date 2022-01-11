@@ -29,7 +29,8 @@ class LdbcGenerator:
         resultContainer = []
         for id in person_ids:
             result = tx.run("MATCH (p:person)-[r:KNOWS*1..2]->(p2:person) WHERE p.person_id = $id RETURN * LIMIT 30",id = id)
-            resultContainer.append(graph_from_cypher(result))
+            if (result.peek() != None):
+                resultContainer.append(graph_from_cypher(result))
         return resultContainer
 ## TODO:  Question: Is it necessary to separarate test and train set in terms of no overlapping person_ids
 
