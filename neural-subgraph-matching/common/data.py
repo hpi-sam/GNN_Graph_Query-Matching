@@ -223,7 +223,7 @@ class OTFSynDataSource(DataSource):
 
 
 class LDBCDataSource(DataSource):
-    """ TODO
+    """ Data Source for the LDBC project data, available here: https://github.com/ldbc/ldbc_snb_datagen_hadoop
     """
 
     def __init__(self, min_size=5, max_size=16):
@@ -242,17 +242,9 @@ class LDBCDataSource(DataSource):
         return dataset
 
     # called for each graph of the dataset
-    # TODO: pass train as argument (check if more stuff is missing here)
-    # TODO: what about our node features? where should they take place?
-    def sample_subgraph(self, graph, offset=0, use_precomp_sizes=False,
-                        filter_negs=False, supersample_small_graphs=False, neg_target=None,
-                        hard_neg_idxs=None):
-        if neg_target is not None:
-            graph_idx = graph.G.graph["idx"]
-        use_hard_neg = (hard_neg_idxs is not None and graph.G.graph["idx"]
-                        in hard_neg_idxs)
+    # TODO: what about our node features?
+    def sample_subgraph(self, graph, offset=0, neg=False, train=True):
         done = False
-        n_tries = 0
         while not done:
             # set the query sizes (TODO: maybe add curriculum learning here)
             d = 1 if train else 0
@@ -273,15 +265,12 @@ class LDBCDataSource(DataSource):
                 frontier = [x for x in frontier if x not in visited]
 
             # anchor node
-            anchor = neigh[0]
-            for v in graph.G.nodes:
-                graph.G.nodes[v]["node_feature"] = (torch.ones(1) if
-                                                    anchor == v else torch.zeros(1))
+            self.add_anchor(graph, anchor=neigh[0])
 
             neigh = graph.G.subgraph(neigh)
 
             # case: negative query
-            if use_hard_neg and train:
+            if neg and train:
                 neigh = neigh.copy()
                 # TODO: for report note that we removed one case proposed by the authors here
                 non_edges = list(nx.non_edges(neigh))
@@ -294,18 +283,26 @@ class LDBCDataSource(DataSource):
 
         return graph, DSGraph(neigh)
 
+    def add_anchor(self, g, anchor=None):
+        if not anchor:
+            anchor = random.choice(list(g.G.nodes))
+        for v in g.G.nodes:
+            if "node_feature" not in g.G.nodes[v]:
+                g.G.nodes[v]["node_feature"] = (torch.ones(1) if anchor == v
+                                                else torch.zeros(1))
+        return g
+
     def gen_data_loaders(self, size, batch_size, train=True,
                          use_distributed_sampling=False):
-        loaders = []
-        for i in range(2):
-            # TODO: remove loop and call functions for pos, neg
-            dataset = self.gen_dataset()
-            # TODO: how does collate work https://pytorch.org/docs/stable/data.html#loading-batched-and-non-batched-data
-            loaders.append(TorchDataLoader(dataset,
-                                           collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False))
-        # why do we need this? Maybe this can be moved to the gen_batch function
-        loaders.append([None]*(size // batch_size))
-        return loaders
+        pos_target_loader = TorchDataLoader(self.gen_dataset(),
+                                            collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
+        neg_target_loader = TorchDataLoader(self.gen_dataset(),
+                                            collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
+        neg_query_loader = TorchDataLoader(self.gen_dataset(),
+                                           # TODO: batch_size // 2 correct here?
+                                           collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
+
+        return [pos_target_loader, neg_target_loader, neg_query_loader]
 
     def gen_batch(self, batch_target, batch_neg_target, batch_neg_query,
                   train):
@@ -314,39 +311,17 @@ class LDBCDataSource(DataSource):
 
         pos_target = batch_target
         pos_target, pos_query = pos_target.apply_transform_multi(
-            # TODO: make it work with passing new arguments
-            self.sample_subgraph)
+            self.sample_subgraph, train=train)
         neg_target = batch_neg_target
-        # TODO: remove randomness
-        hard_neg_idxs = set(random.sample(range(len(neg_target.G)),
-                                          int(len(neg_target.G) * 1/2)))
+        _, neg_query = batch_neg_query.apply_transform_multi(self.sample_subgraph, train=train,
+                                                             neg=True)
 
-        batch_neg_query = Batch.from_data_list(
-            # TODO:
-            [DSGraph(self.generator.generate(size=len(g))
-                     if i not in hard_neg_idxs else g)
-                for i, g in enumerate(neg_target.G)])
-        for i, g in enumerate(batch_neg_query.G):
-            g.graph["idx"] = i
-        _, neg_query = batch_neg_query.apply_transform_multi(sample_subgraph,
-                                                             hard_neg_idxs=hard_neg_idxs)
-        if self.node_anchored:
-            def add_anchor(g, anchors=None):
-                if anchors is not None:
-                    anchor = anchors[g.G.graph["idx"]]
-                else:
-                    anchor = random.choice(list(g.G.nodes))
-                for v in g.G.nodes:
-                    if "node_feature" not in g.G.nodes[v]:
-                        g.G.nodes[v]["node_feature"] = (torch.ones(1) if anchor == v
-                                                        else torch.zeros(1))
-                return g
-            neg_target = neg_target.apply_transform(add_anchor)
+        neg_target = neg_target.apply_transform(self.add_anchor)
         pos_target = augmenter.augment(pos_target).to(utils.get_device())
         pos_query = augmenter.augment(pos_query).to(utils.get_device())
         neg_target = augmenter.augment(neg_target).to(utils.get_device())
         neg_query = augmenter.augment(neg_query).to(utils.get_device())
-        #print(len(pos_target.G[0]), len(pos_query.G[0]))
+
         return pos_target, pos_query, neg_target, neg_query
 
 
