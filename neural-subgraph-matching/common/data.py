@@ -25,6 +25,10 @@ from common import combined_syn
 from common import feature_preprocess
 from common import utils
 
+#added
+from os import listdir
+from os.path import isfile, join
+from ldbc.utils import loadGraph
 
 def load_dataset(name):
     """ Load real-world datasets, available in PyTorch Geometric.
@@ -227,27 +231,15 @@ class LDBCDataSource(DataSource):
         self.min_size = min_size
         self.max_size = max_size
 
-    def gen_neg_dataset():
+    def gen_dataset(self):
         # TODO
-        G = nx.complete_graph(100)
-        H1 = Graph(G)
-        H2 = H1.clone()
-        dataset = GraphDataset(graphs=[H1, H2])
+        setName = "train"
+        if not train:
+            setName = "test"
+        path = "./data/"+setName+"/"
+        target_graphs = [loadGraph(graph) for graph in listdir(path) if isfile(join(path, f))]
+        dataset = GraphDataset(graphs=target_graphs)
         return dataset
-
-    def gen_pos_dataset():
-        # TODO
-        G = nx.complete_graph(100)
-        H1 = Graph(G)
-        H2 = H1.clone()
-        dataset = GraphDataset(graphs=[H1, H2])
-        return dataset
-
-    def gen_neg_batch():
-        pass
-
-    def gen_pos_batch():
-        pass
 
     # called for each graph of the dataset
     # TODO: pass train as argument (check if more stuff is missing here)
