@@ -2,42 +2,42 @@
 
 # Set this flag to True to use hyperparameter optimization
 # We use Testtube for hyperparameter tuning
+from subgraph_matching.test import validation
+from common import utils
+from common import models
+from common import data
+import torch_geometric.nn as pyg_nn
+import torch_geometric.utils as pyg_utils
+from torch_geometric.datasets import TUDataset
+from torch_geometric.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+import torch.optim as optim
+import torch.nn.functional as F
+import torch.multiprocessing as mp
+import torch.nn as nn
+import torch
+from sklearn.manifold import TSNE
+import numpy as np
+import networkx as nx
+from deepsnap.batch import Batch
+import time
+import random
+import os
+from queue import PriorityQueue
+import pickle
+from itertools import permutations
+import argparse
 HYPERPARAM_SEARCH = False
 HYPERPARAM_SEARCH_N_TRIALS = None   # how many grid search trials to run
-                                    #    (set to None for exhaustive search)
+#    (set to None for exhaustive search)
 
-import argparse
-from itertools import permutations
-import pickle
-from queue import PriorityQueue
-import os
-import random
-import time
 
-from deepsnap.batch import Batch
-import networkx as nx
-import numpy as np
-from sklearn.manifold import TSNE
-import torch
-import torch.nn as nn
-import torch.multiprocessing as mp
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
-from torch_geometric.data import DataLoader
-from torch_geometric.datasets import TUDataset
-import torch_geometric.utils as pyg_utils
-import torch_geometric.nn as pyg_nn
-
-from common import data
-from common import models
-from common import utils
 if HYPERPARAM_SEARCH:
     from test_tube import HyperOptArgumentParser
     from subgraph_matching.hyp_search import parse_encoder
 else:
     from subgraph_matching.config import parse_encoder
-from subgraph_matching.test import validation
+
 
 def build_model(args):
     # build model
@@ -48,12 +48,15 @@ def build_model(args):
     model.to(utils.get_device())
     if args.test and args.model_path:
         model.load_state_dict(torch.load(args.model_path,
-            map_location=utils.get_device()))
+                                         map_location=utils.get_device()))
     return model
+
 
 def make_data_source(args):
     toks = args.dataset.split("-")
-    if toks[0] == "syn":
+    if toks[0] == "ldbc":
+        data_source = data.LDBCDataSource()
+    elif toks[0] == "syn":
         if len(toks) == 1 or toks[1] == "balanced":
             data_source = data.OTFSynDataSource(
                 node_anchored=args.node_anchored)
@@ -65,13 +68,14 @@ def make_data_source(args):
     else:
         if len(toks) == 1 or toks[1] == "balanced":
             data_source = data.DiskDataSource(toks[0],
-                node_anchored=args.node_anchored)
+                                              node_anchored=args.node_anchored)
         elif toks[1] == "imbalanced":
             data_source = data.DiskImbalancedDataSource(toks[0],
-                node_anchored=args.node_anchored)
+                                                        node_anchored=args.node_anchored)
         else:
             raise Exception("Error: unrecognized dataset")
     return data_source
+
 
 def train(args, model, logger, in_queue, out_queue):
     """Train the order embedding model.
@@ -89,7 +93,7 @@ def train(args, model, logger, in_queue, out_queue):
     while not done:
         data_source = make_data_source(args)
         loaders = data_source.gen_data_loaders(args.eval_interval *
-            args.batch_size, args.batch_size, train=True)
+                                               args.batch_size, args.batch_size, train=True)
         for batch_target, batch_neg_target, batch_neg_query in zip(*loaders):
             msg, _ = in_queue.get()
             if msg == "done":
@@ -99,9 +103,11 @@ def train(args, model, logger, in_queue, out_queue):
             model.train()
             model.zero_grad()
             pos_a, pos_b, neg_a, neg_b = data_source.gen_batch(batch_target,
-                batch_neg_target, batch_neg_query, True)
-            emb_pos_a, emb_pos_b = model.emb_model(pos_a), model.emb_model(pos_b)
-            emb_neg_a, emb_neg_b = model.emb_model(neg_a), model.emb_model(neg_b)
+                                                               batch_neg_target, batch_neg_query, True)
+            emb_pos_a, emb_pos_b = model.emb_model(
+                pos_a), model.emb_model(pos_b)
+            emb_neg_a, emb_neg_b = model.emb_model(
+                neg_a), model.emb_model(neg_b)
             #print(emb_pos_a.shape, emb_neg_a.shape, emb_neg_b.shape)
             emb_as = torch.cat((emb_pos_a, emb_neg_a), dim=0)
             emb_bs = torch.cat((emb_pos_b, emb_neg_b), dim=0)
@@ -130,7 +136,8 @@ def train(args, model, logger, in_queue, out_queue):
             train_loss = loss.item()
             train_acc = acc.item()
 
-            out_queue.put(("step", (loss.item(), acc)))
+            out_queue.put(("step", (train_loss, train_acc)))
+
 
 def train_loop(args):
     if not os.path.exists(os.path.dirname(args.model_path)):
@@ -144,9 +151,9 @@ def train_loop(args):
     print("Using dataset {}".format(args.dataset))
 
     record_keys = ["conv_type", "n_layers", "hidden_dim",
-        "margin", "dataset", "max_graph_size", "skip"]
+                   "margin", "dataset", "max_graph_size", "skip"]
     args_str = ".".join(["{}={}".format(k, v)
-        for k, v in sorted(vars(args).items()) if k in record_keys])
+                         for k, v in sorted(vars(args).items()) if k in record_keys])
     logger = SummaryWriter(comment=args_str)
 
     model = build_model(args)
@@ -159,11 +166,11 @@ def train_loop(args):
 
     data_source = make_data_source(args)
     loaders = data_source.gen_data_loaders(args.val_size, args.batch_size,
-        train=False, use_distributed_sampling=False)
+                                           train=False, use_distributed_sampling=False)
     test_pts = []
     for batch_target, batch_neg_target, batch_neg_query in zip(*loaders):
         pos_a, pos_b, neg_a, neg_b = data_source.gen_batch(batch_target,
-            batch_neg_target, batch_neg_query, False)
+                                                           batch_neg_target, batch_neg_query, False)
         if pos_a:
             pos_a = pos_a.to(torch.device("cpu"))
             pos_b = pos_b.to(torch.device("cpu"))
@@ -174,7 +181,7 @@ def train_loop(args):
     workers = []
     for i in range(args.n_workers):
         worker = mp.Process(target=train, args=(args, model, data_source,
-            in_queue, out_queue))
+                                                in_queue, out_queue))
         worker.start()
         workers.append(worker)
 
@@ -200,11 +207,12 @@ def train_loop(args):
     for worker in workers:
         worker.join()
 
+
 def main(force_test=False):
     mp.set_start_method("spawn", force=True)
     parser = (argparse.ArgumentParser(description='Order embedding arguments')
-        if not HYPERPARAM_SEARCH else
-        HyperOptArgumentParser(strategy='grid_search'))
+              if not HYPERPARAM_SEARCH else
+              HyperOptArgumentParser(strategy='grid_search'))
 
     utils.parse_optimizer(parser)
     parse_encoder(parser)
@@ -223,6 +231,7 @@ def main(force_test=False):
             train_loop(hparam_trial)
     else:
         train_loop(args)
+
 
 if __name__ == '__main__':
     main()
