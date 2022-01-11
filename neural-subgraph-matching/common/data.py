@@ -227,7 +227,7 @@ class LDBCDataSource(DataSource):
     """ Data Source for the LDBC project data, available here: https://github.com/ldbc/ldbc_snb_datagen_hadoop
     """
 
-    def __init__(self, min_size=5, max_size=16):
+    def __init__(self, min_size=2, max_size=2):
         self.closed = False
         self.min_size = min_size
         self.max_size = max_size
@@ -253,13 +253,20 @@ class LDBCDataSource(DataSource):
         while not done:
             # set the query sizes (TODO: maybe add curriculum learning here)
             d = 1 if train else 0
+            offset = 0
             # do we want to keep randomness? TODO: add seed
-            size = random.randint(self.min_size + offset - d,
-                                  len(graph.G) - 1 + offset)
+            # size = random.randint(self.min_size + offset - d,
+            #                       len(graph.G) - 1 + offset)
+            size = 2
+           # print(size)
+            # print(nx.to_dict_of_dicts(graph.G))
+            #size = 2
             start_node = random.choice(list(graph.G.nodes))
+            # print(start_node)
             neigh = [start_node]
             frontier = list(
                 set(graph.G.neighbors(start_node)) - set(neigh))
+            # print(frontier)
             visited = set([start_node])
             while len(neigh) < size:
                 new_node = random.choice(list(frontier))
@@ -269,16 +276,20 @@ class LDBCDataSource(DataSource):
                 frontier += list(graph.G.neighbors(new_node))
                 frontier = [x for x in frontier if x not in visited]
 
+            # print(neigh)
             # anchor node
             self.add_anchor(graph, anchor=neigh[0])
-
+            # print(neigh)
             neigh = graph.G.subgraph(neigh)
+            # print(neigh.edges)
 
             # case: negative query
             if neg and train:
+
                 neigh = neigh.copy()
                 # TODO: for report note that we removed one case proposed by the authors here
                 non_edges = list(nx.non_edges(neigh))
+                # print(non_edges)
                 if len(non_edges) > 0:
                     for u, v in random.sample(non_edges, random.randint(1,
                                                                         min(len(non_edges), 5))):
@@ -286,6 +297,7 @@ class LDBCDataSource(DataSource):
 
             done = True
 
+        # print(DSGraph(neigh))
         return graph, DSGraph(neigh)
 
     def add_anchor(self, g, anchor=None):
@@ -299,7 +311,6 @@ class LDBCDataSource(DataSource):
 
     def gen_data_loaders(self, size, batch_size, train=True,
                          use_distributed_sampling=False):
-        print(train)
         pos_target_loader = TorchDataLoader(self.gen_dataset(train=train),
                                             collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
         neg_target_loader = TorchDataLoader(self.gen_dataset(train=train),
@@ -316,9 +327,11 @@ class LDBCDataSource(DataSource):
         augmenter = feature_preprocess.FeatureAugment()
 
         pos_target = batch_target
+        #print("sample pos")
         pos_target, pos_query = pos_target.apply_transform_multi(
             self.sample_subgraph, train=train)
         neg_target = batch_neg_target
+        #print("sample neg")
         _, neg_query = batch_neg_query.apply_transform_multi(self.sample_subgraph, train=train,
                                                              neg=True)
 
