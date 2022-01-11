@@ -29,4 +29,13 @@ def saveGraph(setName, graph, name):
 def loadGraph(setName, name):
     print(setName, name)
     g = pickle.load(open('./data/'+setName+'/' + name, 'rb'))
+
+    # edges = []
+
+    # for edge in g.edges:
+    #     u, v, k = edge
+    #     props = g.edges[u, v, k]
+    #     print(props)
+
+    # print(g.edges)
     return g
