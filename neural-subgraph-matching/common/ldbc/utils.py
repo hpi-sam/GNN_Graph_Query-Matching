@@ -15,6 +15,9 @@ def graph_from_cypher(results):
         G.add_edge(rel.start_node.id, rel.end_node.id
         #,key=rel.id, type=rel.type, properties=rel._properties
         )
+        G.add_edge(rel.end_node.id,rel.start_node.id
+        #,key=rel.id, type=rel.type, properties=rel._properties
+        )
     return G
 
 def saveGraph(setName, graph, name):
