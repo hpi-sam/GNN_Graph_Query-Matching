@@ -25,10 +25,11 @@ from common import combined_syn
 from common import feature_preprocess
 from common import utils
 
-#added
+# added
 from os import listdir
 from os.path import isfile, join
-from ldbc.utils import loadGraph
+from common.ldbc.utils import loadGraph
+
 
 def load_dataset(name):
     """ Load real-world datasets, available in PyTorch Geometric.
@@ -157,7 +158,7 @@ class OTFSynDataSource(DataSource):
                     for v in graph.G.nodes:
                         graph.G.nodes[v]["node_feature"] = (torch.ones(1) if
                                                             anchor == v else torch.zeros(1))
-                        #print(v, graph.G.nodes[v]["node_feature"])
+                        # print(v, graph.G.nodes[v]["node_feature"])
                 neigh = graph.G.subgraph(neigh)
                 if use_hard_neg and train:
                     neigh = neigh.copy()
@@ -193,7 +194,7 @@ class OTFSynDataSource(DataSource):
         # TODO: use hard negs
         hard_neg_idxs = set(random.sample(range(len(neg_target.G)),
                                           int(len(neg_target.G) * 1/2)))
-        #hard_neg_idxs = set()
+        # hard_neg_idxs = set()
         batch_neg_query = Batch.from_data_list(
             [DSGraph(self.generator.generate(size=len(g))
                      if i not in hard_neg_idxs else g)
@@ -218,7 +219,7 @@ class OTFSynDataSource(DataSource):
         pos_query = augmenter.augment(pos_query).to(utils.get_device())
         neg_target = augmenter.augment(neg_target).to(utils.get_device())
         neg_query = augmenter.augment(neg_query).to(utils.get_device())
-        #print(len(pos_target.G[0]), len(pos_query.G[0]))
+        # print(len(pos_target.G[0]), len(pos_query.G[0]))
         return pos_target, pos_query, neg_target, neg_query
 
 
@@ -231,13 +232,17 @@ class LDBCDataSource(DataSource):
         self.min_size = min_size
         self.max_size = max_size
 
-    def gen_dataset(self):
+    def gen_dataset(self, train):
         # TODO
+        print(train)
         setName = "train"
         if not train:
             setName = "test"
         path = "./data/"+setName+"/"
-        target_graphs = [loadGraph(graph) for graph in listdir(path) if isfile(join(path, f))]
+        target_graphs = [loadGraph(setName, graph) for graph in listdir(
+            path) if isfile(join(path, graph))]
+        # filtered = filter(
+        #     lambda x: not nx.is_empty(x), target_graphs)
         dataset = GraphDataset(graphs=target_graphs)
         return dataset
 
@@ -294,11 +299,12 @@ class LDBCDataSource(DataSource):
 
     def gen_data_loaders(self, size, batch_size, train=True,
                          use_distributed_sampling=False):
-        pos_target_loader = TorchDataLoader(self.gen_dataset(),
+        print(train)
+        pos_target_loader = TorchDataLoader(self.gen_dataset(train=train),
                                             collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
-        neg_target_loader = TorchDataLoader(self.gen_dataset(),
+        neg_target_loader = TorchDataLoader(self.gen_dataset(train=train),
                                             collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
-        neg_query_loader = TorchDataLoader(self.gen_dataset(),
+        neg_query_loader = TorchDataLoader(self.gen_dataset(train=train),
                                            # TODO: batch_size // 2 correct here?
                                            collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
 
@@ -562,7 +568,7 @@ if __name__ == "__main__":
                       nodes in neighs]
         path_length = [nx.average_shortest_path_length(graph.subgraph(nodes))
                        for graph, nodes in neighs]
-        #plt.subplot(1, 2, i-9)
+        # plt.subplot(1, 2, i-9)
         plt.scatter(clustering, path_length, s=10, label=name)
     plt.legend()
     plt.savefig("plots/clustering-vs-path-length.png")
