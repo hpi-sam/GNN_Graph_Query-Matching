@@ -233,8 +233,6 @@ class LDBCDataSource(DataSource):
         self.max_size = max_size
 
     def gen_dataset(self, train):
-        # TODO
-        print(train)
         setName = "train"
         if not train:
             setName = "test"

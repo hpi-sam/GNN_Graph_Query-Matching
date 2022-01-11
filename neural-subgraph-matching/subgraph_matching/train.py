@@ -166,6 +166,7 @@ def train_loop(args):
 
     data_source = make_data_source(args)
     loaders = data_source.gen_data_loaders(args.val_size, args.batch_size,
+                                           # TODO: Why was train at False initially
                                            train=True, use_distributed_sampling=False)
     test_pts = []
     for batch_target, batch_neg_target, batch_neg_query in zip(*loaders):
