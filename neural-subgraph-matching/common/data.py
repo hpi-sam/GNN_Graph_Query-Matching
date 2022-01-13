@@ -25,10 +25,11 @@ from common import combined_syn
 from common import feature_preprocess
 from common import utils
 
-#added
+# added
 from os import listdir
 from os.path import isfile, join
-from ldbc.utils import loadGraph
+from common.ldbc.utils import loadGraph
+
 
 def load_dataset(name):
     """ Load real-world datasets, available in PyTorch Geometric.
@@ -157,7 +158,7 @@ class OTFSynDataSource(DataSource):
                     for v in graph.G.nodes:
                         graph.G.nodes[v]["node_feature"] = (torch.ones(1) if
                                                             anchor == v else torch.zeros(1))
-                        #print(v, graph.G.nodes[v]["node_feature"])
+                        # print(v, graph.G.nodes[v]["node_feature"])
                 neigh = graph.G.subgraph(neigh)
                 if use_hard_neg and train:
                     neigh = neigh.copy()
@@ -193,7 +194,7 @@ class OTFSynDataSource(DataSource):
         # TODO: use hard negs
         hard_neg_idxs = set(random.sample(range(len(neg_target.G)),
                                           int(len(neg_target.G) * 1/2)))
-        #hard_neg_idxs = set()
+        # hard_neg_idxs = set()
         batch_neg_query = Batch.from_data_list(
             [DSGraph(self.generator.generate(size=len(g))
                      if i not in hard_neg_idxs else g)
@@ -218,7 +219,7 @@ class OTFSynDataSource(DataSource):
         pos_query = augmenter.augment(pos_query).to(utils.get_device())
         neg_target = augmenter.augment(neg_target).to(utils.get_device())
         neg_query = augmenter.augment(neg_query).to(utils.get_device())
-        #print(len(pos_target.G[0]), len(pos_query.G[0]))
+        # print(len(pos_target.G[0]), len(pos_query.G[0]))
         return pos_target, pos_query, neg_target, neg_query
 
 
@@ -226,18 +227,20 @@ class LDBCDataSource(DataSource):
     """ Data Source for the LDBC project data, available here: https://github.com/ldbc/ldbc_snb_datagen_hadoop
     """
 
-    def __init__(self, min_size=5, max_size=16):
+    def __init__(self, min_size=2, max_size=2):
         self.closed = False
         self.min_size = min_size
         self.max_size = max_size
 
-    def gen_dataset(self):
-        # TODO
+    def gen_dataset(self, train):
         setName = "train"
         if not train:
             setName = "test"
         path = "./data/"+setName+"/"
-        target_graphs = [loadGraph(graph) for graph in listdir(path) if isfile(join(path, f))]
+        target_graphs = [loadGraph(setName, graph) for graph in listdir(
+            path) if isfile(join(path, graph))]
+        # filtered = filter(
+        #     lambda x: not nx.is_empty(x), target_graphs)
         dataset = GraphDataset(graphs=target_graphs)
         return dataset
 
@@ -248,13 +251,20 @@ class LDBCDataSource(DataSource):
         while not done:
             # set the query sizes (TODO: maybe add curriculum learning here)
             d = 1 if train else 0
+            offset = 0
             # do we want to keep randomness? TODO: add seed
-            size = random.randint(self.min_size + offset - d,
-                                  len(graph.G) - 1 + offset)
+            # size = random.randint(self.min_size + offset - d,
+            #                       len(graph.G) - 1 + offset)
+            size = 2
+           # print(size)
+            # print(nx.to_dict_of_dicts(graph.G))
+            #size = 2
             start_node = random.choice(list(graph.G.nodes))
+            # print(start_node)
             neigh = [start_node]
             frontier = list(
                 set(graph.G.neighbors(start_node)) - set(neigh))
+            # print(frontier)
             visited = set([start_node])
             while len(neigh) < size:
                 new_node = random.choice(list(frontier))
@@ -264,16 +274,20 @@ class LDBCDataSource(DataSource):
                 frontier += list(graph.G.neighbors(new_node))
                 frontier = [x for x in frontier if x not in visited]
 
+            # print(neigh)
             # anchor node
             self.add_anchor(graph, anchor=neigh[0])
-
+            # print(neigh)
             neigh = graph.G.subgraph(neigh)
+            # print(neigh.edges)
 
             # case: negative query
             if neg and train:
+
                 neigh = neigh.copy()
                 # TODO: for report note that we removed one case proposed by the authors here
                 non_edges = list(nx.non_edges(neigh))
+                # print(non_edges)
                 if len(non_edges) > 0:
                     for u, v in random.sample(non_edges, random.randint(1,
                                                                         min(len(non_edges), 5))):
@@ -281,6 +295,7 @@ class LDBCDataSource(DataSource):
 
             done = True
 
+        # print(DSGraph(neigh))
         return graph, DSGraph(neigh)
 
     def add_anchor(self, g, anchor=None):
@@ -294,11 +309,11 @@ class LDBCDataSource(DataSource):
 
     def gen_data_loaders(self, size, batch_size, train=True,
                          use_distributed_sampling=False):
-        pos_target_loader = TorchDataLoader(self.gen_dataset(),
+        pos_target_loader = TorchDataLoader(self.gen_dataset(train=train),
                                             collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
-        neg_target_loader = TorchDataLoader(self.gen_dataset(),
+        neg_target_loader = TorchDataLoader(self.gen_dataset(train=train),
                                             collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
-        neg_query_loader = TorchDataLoader(self.gen_dataset(),
+        neg_query_loader = TorchDataLoader(self.gen_dataset(train=train),
                                            # TODO: batch_size // 2 correct here?
                                            collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
 
@@ -310,9 +325,11 @@ class LDBCDataSource(DataSource):
         augmenter = feature_preprocess.FeatureAugment()
 
         pos_target = batch_target
+        #print("sample pos")
         pos_target, pos_query = pos_target.apply_transform_multi(
             self.sample_subgraph, train=train)
         neg_target = batch_neg_target
+        #print("sample neg")
         _, neg_query = batch_neg_query.apply_transform_multi(self.sample_subgraph, train=train,
                                                              neg=True)
 
@@ -562,7 +579,7 @@ if __name__ == "__main__":
                       nodes in neighs]
         path_length = [nx.average_shortest_path_length(graph.subgraph(nodes))
                        for graph, nodes in neighs]
-        #plt.subplot(1, 2, i-9)
+        # plt.subplot(1, 2, i-9)
         plt.scatter(clustering, path_length, s=10, label=name)
     plt.legend()
     plt.savefig("plots/clustering-vs-path-length.png")

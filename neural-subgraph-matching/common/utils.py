@@ -13,7 +13,8 @@ import random
 import scipy.stats as stats
 from tqdm import tqdm
 
-import feature_preprocess
+from common import feature_preprocess
+
 
 def sample_neigh(graphs, size):
     ps = np.array([len(g) for g in graphs], dtype=np.float)
@@ -38,7 +39,10 @@ def sample_neigh(graphs, size):
         if len(neigh) == size:
             return graph, neigh
 
+
 cached_masks = None
+
+
 def vec_hash(v):
     global cached_masks
     if cached_masks is None:
@@ -48,6 +52,7 @@ def vec_hash(v):
     v = [hash(v[i]) ^ mask for i, mask in enumerate(cached_masks)]
     #v = [np.sum(v) for mask in cached_masks]
     return v
+
 
 def wl_hash(g, dim=64, node_anchored=False):
     g = nx.convert_node_labels_to_integers(g)
@@ -61,9 +66,10 @@ def wl_hash(g, dim=64, node_anchored=False):
         newvecs = np.zeros((len(g), dim), dtype=np.int)
         for n in g.nodes:
             newvecs[n] = vec_hash(np.sum(vecs[list(g.neighbors(n)) + [n]],
-                axis=0))
+                                         axis=0))
         vecs = newvecs
     return tuple(np.sum(vecs, axis=0))
+
 
 def gen_baseline_queries_rand_esu(queries, targets, node_anchored=False):
     sizes = Counter([len(g) for g in queries])
@@ -72,10 +78,11 @@ def gen_baseline_queries_rand_esu(queries, targets, node_anchored=False):
     total_n_max_subgraphs, total_n_subgraphs = 0, 0
     for target in tqdm(targets):
         subgraphs = enumerate_subgraph(target, k=max_size,
-            progress_bar=len(targets) < 10, node_anchored=node_anchored)
+                                       progress_bar=len(targets) < 10, node_anchored=node_anchored)
         for (size, k), v in subgraphs.items():
             all_subgraphs[size][k] += v
-            if size == max_size: total_n_max_subgraphs += len(v)
+            if size == max_size:
+                total_n_max_subgraphs += len(v)
             total_n_subgraphs += len(v)
     print(total_n_subgraphs, "subgraphs explored")
     print(total_n_max_subgraphs, "max-size subgraphs explored")
@@ -83,10 +90,11 @@ def gen_baseline_queries_rand_esu(queries, targets, node_anchored=False):
     for size, count in sizes.items():
         counts = all_subgraphs[size]
         for _, neighs in list(sorted(counts.items(), key=lambda x: len(x[1]),
-            reverse=True))[:count]:
+                                     reverse=True))[:count]:
             print(len(neighs))
             out.append(random.choice(neighs))
     return out
+
 
 def enumerate_subgraph(G, k=3, progress_bar=False, node_anchored=False):
     ps = np.arange(1.0, 0.0, -1.0/(k+1)) ** 1.5
@@ -99,12 +107,13 @@ def enumerate_subgraph(G, k=3, progress_bar=False, node_anchored=False):
         neighbors = [nbr for nbr in list(G[node].keys()) if nbr > node]
         n_frac = len(neighbors) * ps[1]
         n_samples = int(n_frac) + (1 if random.random() < n_frac - int(n_frac)
-            else 0)
+                                   else 0)
         neighbors = random.sample(neighbors, n_samples)
         for nbr in neighbors:
             v_ext.add(nbr)
         extend_subgraph(G, k, sg, v_ext, node, motif_counts, ps, node_anchored)
     return motif_counts
+
 
 def extend_subgraph(G, k, sg, v_ext, node_id, motif_counts, ps, node_anchored):
     # Base case
@@ -115,7 +124,7 @@ def extend_subgraph(G, k, sg, v_ext, node_id, motif_counts, ps, node_anchored):
         sg_G.nodes[node_id]["anchor"] = 1
 
     motif_counts[len(sg), wl_hash(sg_G,
-        node_anchored=node_anchored)].append(sg_G)
+                                  node_anchored=node_anchored)].append(sg_G)
     if len(sg) == k:
         return
     # Recursive step:
@@ -124,24 +133,25 @@ def extend_subgraph(G, k, sg, v_ext, node_id, motif_counts, ps, node_anchored):
         w = v_ext.pop()
         new_v_ext = v_ext.copy()
         neighbors = [nbr for nbr in list(G[w].keys()) if nbr > node_id and nbr
-            not in sg and nbr not in old_v_ext]
+                     not in sg and nbr not in old_v_ext]
         n_frac = len(neighbors) * ps[len(sg) + 1]
         n_samples = int(n_frac) + (1 if random.random() < n_frac - int(n_frac)
-            else 0)
+                                   else 0)
         neighbors = random.sample(neighbors, n_samples)
         for nbr in neighbors:
-            #if nbr > node_id and nbr not in sg and nbr not in old_v_ext:
+            # if nbr > node_id and nbr not in sg and nbr not in old_v_ext:
             new_v_ext.add(nbr)
         sg.add(w)
         extend_subgraph(G, k, sg, new_v_ext, node_id, motif_counts, ps,
-            node_anchored)
+                        node_anchored)
         sg.remove(w)
 
+
 def gen_baseline_queries_mfinder(queries, targets, n_samples=10000,
-    node_anchored=False):
+                                 node_anchored=False):
     sizes = Counter([len(g) for g in queries])
     #sizes = {}
-    #for i in range(5, 17):
+    # for i in range(5, 17):
     #    sizes[i] = 10
     out = []
     for size, count in tqdm(sizes.items()):
@@ -156,7 +166,7 @@ def gen_baseline_queries_mfinder(queries, targets, n_samples=10000,
             neigh.remove_edges_from(nx.selfloop_edges(neigh))
             counts[wl_hash(neigh, node_anchored=node_anchored)].append(neigh)
         #bads, t = 0, 0
-        #for ka, nas in counts.items():
+        # for ka, nas in counts.items():
         #    for kb, nbs in counts.items():
         #        if ka != kb:
         #            for a in nas:
@@ -167,12 +177,15 @@ def gen_baseline_queries_mfinder(queries, targets, n_samples=10000,
         #                    t += 1
 
         for _, neighs in list(sorted(counts.items(), key=lambda x: len(x[1]),
-            reverse=True))[:count]:
+                                     reverse=True))[:count]:
             print(len(neighs))
             out.append(random.choice(neighs))
     return out
 
+
 device_cache = None
+
+
 def get_device():
     global device_cache
     if device_cache is None:
@@ -181,47 +194,55 @@ def get_device():
         #device_cache = torch.device("cpu")
     return device_cache
 
+
 def parse_optimizer(parser):
     opt_parser = parser.add_argument_group()
     opt_parser.add_argument('--opt', dest='opt', type=str,
-            help='Type of optimizer')
+                            help='Type of optimizer')
     opt_parser.add_argument('--opt-scheduler', dest='opt_scheduler', type=str,
-            help='Type of optimizer scheduler. By default none')
+                            help='Type of optimizer scheduler. By default none')
     opt_parser.add_argument('--opt-restart', dest='opt_restart', type=int,
-            help='Number of epochs before restart (by default set to 0 which means no restart)')
+                            help='Number of epochs before restart (by default set to 0 which means no restart)')
     opt_parser.add_argument('--opt-decay-step', dest='opt_decay_step', type=int,
-            help='Number of epochs before decay')
+                            help='Number of epochs before decay')
     opt_parser.add_argument('--opt-decay-rate', dest='opt_decay_rate', type=float,
-            help='Learning rate decay ratio')
+                            help='Learning rate decay ratio')
     opt_parser.add_argument('--lr', dest='lr', type=float,
-            help='Learning rate.')
+                            help='Learning rate.')
     opt_parser.add_argument('--clip', dest='clip', type=float,
-            help='Gradient clipping.')
+                            help='Gradient clipping.')
     opt_parser.add_argument('--weight_decay', type=float,
-            help='Optimizer weight decay.')
+                            help='Optimizer weight decay.')
+
 
 def build_optimizer(args, params):
     weight_decay = args.weight_decay
-    filter_fn = filter(lambda p : p.requires_grad, params)
+    filter_fn = filter(lambda p: p.requires_grad, params)
     if args.opt == 'adam':
-        optimizer = optim.Adam(filter_fn, lr=args.lr, weight_decay=weight_decay)
+        optimizer = optim.Adam(filter_fn, lr=args.lr,
+                               weight_decay=weight_decay)
     elif args.opt == 'sgd':
         optimizer = optim.SGD(filter_fn, lr=args.lr, momentum=0.95,
-            weight_decay=weight_decay)
+                              weight_decay=weight_decay)
     elif args.opt == 'rmsprop':
-        optimizer = optim.RMSprop(filter_fn, lr=args.lr, weight_decay=weight_decay)
+        optimizer = optim.RMSprop(
+            filter_fn, lr=args.lr, weight_decay=weight_decay)
     elif args.opt == 'adagrad':
-        optimizer = optim.Adagrad(filter_fn, lr=args.lr, weight_decay=weight_decay)
+        optimizer = optim.Adagrad(
+            filter_fn, lr=args.lr, weight_decay=weight_decay)
     if args.opt_scheduler == 'none':
         return None, optimizer
     elif args.opt_scheduler == 'step':
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.opt_decay_step, gamma=args.opt_decay_rate)
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer, step_size=args.opt_decay_step, gamma=args.opt_decay_rate)
     elif args.opt_scheduler == 'cos':
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.opt_restart)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=args.opt_restart)
     return scheduler, optimizer
 
+
 def batch_nx_graphs(graphs, anchors=None):
-    #motifs_batch = [pyg_utils.from_networkx(
+    # motifs_batch = [pyg_utils.from_networkx(
     #    nx.convert_node_labels_to_integers(graph)) for graph in graphs]
     #loader = DataLoader(motifs_batch, batch_size=len(motifs_batch))
     #for b in loader: batch = b
