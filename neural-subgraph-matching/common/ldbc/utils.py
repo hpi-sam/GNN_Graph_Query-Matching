@@ -1,6 +1,7 @@
 import networkx as nx
 import pickle
 import os
+import matplotlib.pyplot as plt
 
 # Source from https://stackoverflow.com/questions/59289134/constructing-networkx-graph-from-neo4j-query-result
 
