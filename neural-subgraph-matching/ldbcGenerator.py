@@ -1,7 +1,7 @@
 from neo4j import GraphDatabase
-from common.ldbc.utils import graph_from_cypher, saveGraph, loadGraph
+from common.ldbc.utils import graph_from_cypher, saveGraph, loadGraph, visualizeGraph
 import networkx as nx
-
+import matplotlib.pyplot as plt
 
 class LdbcGenerator:
 
@@ -27,16 +27,12 @@ class LdbcGenerator:
             values.append(record.value())
         return values
 
-
     @staticmethod
     def innerQuery(tx,person_ids, useFeatures):
         resultContainer = []
         for id in person_ids:
             #result = tx.run("MATCH (p1:person)-[r:KNOWS*1..2]->(p2:person) WHERE p1.person_id = $id RETURN *",id = id)
             result = tx.run("MATCH (place1:place)<-[l1:IS_LOCATED_IN]-(p1:person)-[r:KNOWS*1..2]->(p2:person)-[l2:IS_LOCATED_IN]->(place2:place) WHERE p1.person_id = $id RETURN *",id = id)
-            #for record in result:
-            #    print(record)
-            #return
             resultContainer.append(graph_from_cypher(result, useFeatures = useFeatures))
         return resultContainer
 ## TODO:  Question: Is it necessary to separarate test and train set in terms of no overlapping person_ids
@@ -44,9 +40,8 @@ class LdbcGenerator:
 if __name__ == "__main__":
 
     generator = LdbcGenerator("bolt://localhost:7687", "neo4j", "1234")
-    targetGraphs = generator.get_target_graph(useFeatures=True)
-    generator.close()
-
+    targetGraphs = generator.get_target_graph(useFeatures=False)
+    #generator.close()
     train_set= len(targetGraphs)  * 0.8
     for graphId, targetGraph in enumerate(targetGraphs):
         if graphId < train_set:
@@ -54,10 +49,15 @@ if __name__ == "__main__":
         else:
             saveGraph("test",targetGraph,str(graphId))
 
+    targetGraphs = generator.get_target_graph(useFeatures=True)
+    generator.close()
+    train_set= len(targetGraphs)  * 0.8
+    for graphId, targetGraph in enumerate(targetGraphs):
+        if graphId < train_set:
+            saveGraph("trainFeatures",targetGraph,str(graphId))
+        else:
+            saveGraph("testFeatures",targetGraph,str(graphId))
 
-
-#MATCH (p:person)-[r:KNOWS*1..2]->(p2:person)
-#WITH p, COUNT(DISTINCT r) AS edgecount, COUNT(DISTINCT p2) AS cnt
-#WHERE cnt >= 20 AND cnt <=100
-#RETURN p.person_id, edgecount, cnt
-#ORDER BY edgecount DESC, cnt DESC
+    # Visualize sample
+    g = loadGraph("trainFeatures", "1.pkl")
+    visualizeGraph(g)
