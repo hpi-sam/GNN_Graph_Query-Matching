@@ -12,6 +12,8 @@ def analyzeGraph(g):
         "#Edges": len(g.edges),
         "AvgDegree": sum([g.degree[i] for i in g.nodes])/len(g.nodes),
         "MaxDegree": max(g.degree, key = lambda k: k[1])[1],
+        "Diameter": nx.algorithms.distance_measures.diameter(g),
+        "AvgClusteringCoefficient": nx.algorithms.cluster.average_clustering(g),
         "Nodes": g.nodes,
         "Edges": g.edges}
 
