@@ -1,6 +1,7 @@
 import os
 import pickle
 import random
+import json
 
 from deepsnap.graph import Graph as DSGraph
 from deepsnap.batch import Batch
@@ -29,9 +30,9 @@ from common import utils
 from os import listdir
 from os.path import isfile, join
 from common.ldbc.utils import loadGraph
+from common.random_basis_dataset import RandomBasisDataset, toGT
 
-
-def load_dataset(name):
+def load_dataset(name, get_feats = False):
     """ Load real-world datasets, available in PyTorch Geometric.
 
     Used as a helper for DiskDataSource.
@@ -69,11 +70,22 @@ def load_dataset(name):
             if not type(graph) == nx.Graph:
                 if has_name:
                     del graph.name
+                if get_feats:
+                    graph = pyg_utils.to_networkx(graph,
+                        node_attrs=["x"]).to_undirected()
+                    for v in graph:
+                        graph.nodes[v]["feat"] = graph.nodes[v]["x"]
+                else:
+                    graph = pyg_utils.to_networkx(graph).to_undirected()
+                    for v in graph:
+                        graph.nodes[v]["feat"] = np.array([1])
                 graph = pyg_utils.to_networkx(graph).to_undirected()
             if i < train_len:
                 train.append(graph)
             else:
                 test.append(graph)
+        if len(dataset) == 1:    # don't split graphs if single large graph
+            train = test
     return train, test, task
 
 
@@ -117,7 +129,7 @@ class OTFSynDataSource(DataSource):
         return loaders
 
     def gen_batch(self, batch_target, batch_neg_target, batch_neg_query,
-                  train):
+                  train, epoch=None):
         def sample_subgraph(graph, offset=0, use_precomp_sizes=False,
                             filter_negs=False, supersample_small_graphs=False, neg_target=None,
                             hard_neg_idxs=None):
@@ -227,38 +239,46 @@ class LDBCDataSource(DataSource):
     """ Data Source for the LDBC project data, available here: https://github.com/ldbc/ldbc_snb_datagen_hadoop
     """
 
-    def __init__(self, min_size=2, max_size=2):
+    def __init__(self, min_size=3, max_size=30, use_features=False):
         self.closed = False
         self.min_size = min_size
         self.max_size = max_size
+        self.use_features = use_features
 
     def gen_dataset(self, train):
-        setName = "train"
+        setName = "trainFeatures" if self.use_features else "train"
         if not train:
-            setName = "test"
+            setName = "testFeatures" if self.use_features else "test"
         path = "./data/"+setName+"/"
         target_graphs = [loadGraph(setName, graph) for graph in listdir(
             path) if isfile(join(path, graph))]
-        # filtered = filter(
-        #     lambda x: not nx.is_empty(x), target_graphs)
-        dataset = GraphDataset(graphs=target_graphs)
+
+        final_target_graphs = []
+        # transform the node features into the required structure
+        for graph in target_graphs:
+            if self.use_features:
+                for v in graph:
+                    graph.nodes[v]["feat"] = graph.nodes[v]["x"]
+            else:
+                for v in graph:
+                    graph.nodes[v]["feat"] = np.array([1])
+            final_target_graphs.append(graph)
+
+        dataset = GraphDataset(graphs=final_target_graphs)
         return dataset
 
     # called for each graph of the dataset
-    # TODO: what about our node features?
-    def sample_subgraph(self, graph, offset=0, neg=False, train=True):
+    def sample_subgraph(self, graph, offset=0, neg=False, train=True, epoch=None):
         done = False
         while not done:
             # set the query sizes (TODO: maybe add curriculum learning here)
             d = 1 if train else 0
-            offset = 0
+            #offset = 0
             # do we want to keep randomness? TODO: add seed
-            # size = random.randint(self.min_size + offset - d,
-            #                       len(graph.G) - 1 + offset)
-            size = 2
-           # print(size)
+            # TODO: check if offset and d was useful
+            size = random.randint(self.min_size, min(len(graph.G), self.max_size))
+            #print(size)
             # print(nx.to_dict_of_dicts(graph.G))
-            #size = 2
             start_node = random.choice(list(graph.G.nodes))
             # print(start_node)
             neigh = [start_node]
@@ -274,16 +294,15 @@ class LDBCDataSource(DataSource):
                 frontier += list(graph.G.neighbors(new_node))
                 frontier = [x for x in frontier if x not in visited]
 
-            # print(neigh)
-            # anchor node
-            self.add_anchor(graph, anchor=neigh[0])
-            # print(neigh)
-            neigh = graph.G.subgraph(neigh)
-            # print(neigh.edges)
+            #print(neigh)
 
+            # anchor node
+            graph = self.add_anchor(graph, anchor=neigh[0])
+            neigh = graph.G.subgraph(neigh)
+            #print(list(neigh.edges))
             # case: negative query
             if neg and train:
-
+               # print("negative!!!!!!!!!")
                 neigh = neigh.copy()
                 # TODO: for report note that we removed one case proposed by the authors here
                 non_edges = list(nx.non_edges(neigh))
@@ -293,8 +312,10 @@ class LDBCDataSource(DataSource):
                                                                         min(len(non_edges), 5))):
                         neigh.add_edge(u, v)
 
+            #print(nx.get_node_attributes(neigh, "x"))
             done = True
 
+        # print(DSGraph(neigh))
         # print(DSGraph(neigh))
         return graph, DSGraph(neigh)
 
@@ -303,6 +324,7 @@ class LDBCDataSource(DataSource):
             anchor = random.choice(list(g.G.nodes))
         for v in g.G.nodes:
             if "node_feature" not in g.G.nodes[v]:
+               # print("node_feature")
                 g.G.nodes[v]["node_feature"] = (torch.ones(1) if anchor == v
                                                 else torch.zeros(1))
         return g
@@ -320,18 +342,18 @@ class LDBCDataSource(DataSource):
         return [pos_target_loader, neg_target_loader, neg_query_loader]
 
     def gen_batch(self, batch_target, batch_neg_target, batch_neg_query,
-                  train):
+                  train, epoch=None):
         # helper class to transform graph depending on e.g. centrality / page rank TODO: do we need this?
         augmenter = feature_preprocess.FeatureAugment()
 
         pos_target = batch_target
         #print("sample pos")
         pos_target, pos_query = pos_target.apply_transform_multi(
-            self.sample_subgraph, train=train)
+            self.sample_subgraph, train=train, epoch=epoch)
         neg_target = batch_neg_target
         #print("sample neg")
         _, neg_query = batch_neg_query.apply_transform_multi(self.sample_subgraph, train=train,
-                                                             neg=True)
+                                                             neg=True, epoch=epoch)
 
         neg_target = neg_target.apply_transform(self.add_anchor)
         pos_target = augmenter.augment(pos_target).to(utils.get_device())

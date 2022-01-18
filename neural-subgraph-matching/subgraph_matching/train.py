@@ -55,7 +55,7 @@ def build_model(args):
 def make_data_source(args):
     toks = args.dataset.split("-")
     if toks[0] == "ldbc":
-        data_source = data.LDBCDataSource()
+        data_source = data.LDBCDataSource(use_features=args.use_features)
     elif toks[0] == "syn":
         if len(toks) == 1 or toks[1] == "balanced":
             data_source = data.OTFSynDataSource(
@@ -95,7 +95,7 @@ def train(args, model, logger, in_queue, out_queue):
         loaders = data_source.gen_data_loaders(args.eval_interval *
                                                args.batch_size, args.batch_size, train=True)
         for batch_target, batch_neg_target, batch_neg_query in zip(*loaders):
-            msg, _ = in_queue.get()
+            msg, epoch = in_queue.get()
             if msg == "done":
                 done = True
                 break
@@ -103,7 +103,7 @@ def train(args, model, logger, in_queue, out_queue):
             model.train()
             model.zero_grad()
             pos_a, pos_b, neg_a, neg_b = data_source.gen_batch(batch_target,
-                                                               batch_neg_target, batch_neg_query, True)
+                                                               batch_neg_target, batch_neg_query, True, epoch=epoch if args.use_curriculum else None)
             emb_pos_a, emb_pos_b = model.emb_model(
                 pos_a), model.emb_model(pos_b)
             emb_neg_a, emb_neg_b = model.emb_model(
@@ -191,7 +191,7 @@ def train_loop(args):
         batch_n = 0
         for epoch in range(args.n_batches // args.eval_interval):
             for i in range(args.eval_interval):
-                in_queue.put(("step", None))
+                in_queue.put(("step", epoch))
             for i in range(args.eval_interval):
                 msg, params = out_queue.get()
                 train_loss, train_acc = params

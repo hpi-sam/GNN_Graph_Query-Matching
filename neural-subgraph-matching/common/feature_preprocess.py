@@ -24,7 +24,8 @@ from torch_scatter import scatter_add
 from common import utils
 
 AUGMENT_METHOD = "concat"
-FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS = [], []
+#FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS = [], []
+FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS = ['dataset_attrs'], [1]
 #FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS = ["identity"], [4]
 #FEATURE_AUGMENT = ["motif_counts"]
 #FEATURE_AUGMENT_DIMS = [73]
@@ -131,6 +132,17 @@ class FeatureAugment(nn.Module):
                     graph.G.nodes[v]["node_feature"] = torch.ones(feature_dim)
             return graph
 
+        def dataset_attrs_fun(graph, feature_dim):
+            graph.dataset_attrs = torch.zeros((len(graph.G.nodes), feature_dim))
+
+            for i, v in enumerate(graph.G.nodes):
+                feat = (graph.G.nodes[v]["label"] if "label" in
+                    graph.G.nodes[v] else (graph.G.nodes[v]["feat"] if "feat"
+                    in graph.G.nodes[v] else np.zeros(1)))
+                graph.dataset_attrs[i,:len([feat])] = torch.tensor(
+                    [feat], dtype=torch.float)
+            return graph
+
         self.node_features_base_fun = node_features_base_fun
 
         self.node_feature_funs = {"node_degree": degree_fun,
@@ -139,9 +151,10 @@ class FeatureAugment(nn.Module):
             "pagerank": pagerank_fun,
             'node_clustering_coefficient': clustering_coefficient_fun,
             "motif_counts": motif_counts_fun,
-            "identity": identity_fun}
+            "identity": identity_fun,
+            "dataset_attrs": dataset_attrs_fun}
 
-    def register_feature_fun(name, feature_fun):
+    def register_feature_fun(self, name, feature_fun):
         self.node_feature_funs[name] = feature_fun
 
     @staticmethod
@@ -208,7 +221,7 @@ class Preprocess(nn.Module):
             return self.dim_in + sum(
                     [aug_dim for aug_dim in FEATURE_AUGMENT_DIMS])
         elif AUGMENT_METHOD == 'add':
-            return dim_in
+            return self.dim_in
         else:
             raise ValueError('Unknown feature augmentation method {}.'.format(
                     AUGMENT_METHOD))
@@ -217,7 +230,7 @@ class Preprocess(nn.Module):
         if AUGMENT_METHOD == 'concat':
             feature_list = [batch.node_feature]
             for key in FEATURE_AUGMENT:
-                feature_list.append(batch[key])
+                feature_list.append(batch[key]) 
             batch.node_feature = torch.cat(feature_list, dim=-1)
         elif AUGMENT_METHOD == 'add':
             for key in FEATURE_AUGMENT:
