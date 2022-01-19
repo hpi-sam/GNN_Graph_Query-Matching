@@ -27,6 +27,7 @@ from queue import PriorityQueue
 import pickle
 from itertools import permutations
 import argparse
+import time
 HYPERPARAM_SEARCH = False
 HYPERPARAM_SEARCH_N_TRIALS = None   # how many grid search trials to run
 #    (set to None for exhaustive search)
@@ -209,6 +210,7 @@ def train_loop(args):
 
 
 def main(force_test=False):
+    start = time.time()
     mp.set_start_method("spawn", force=True)
     parser = (argparse.ArgumentParser(description='Order embedding arguments')
               if not HYPERPARAM_SEARCH else
@@ -231,6 +233,8 @@ def main(force_test=False):
             train_loop(hparam_trial)
     else:
         train_loop(args)
+    _time = int(time.time() - start)
+    print(f"Finished in {_time} s")
 
 
 if __name__ == '__main__':

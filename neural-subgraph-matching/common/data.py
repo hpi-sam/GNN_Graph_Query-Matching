@@ -30,7 +30,6 @@ from common import utils
 from os import listdir
 from os.path import isfile, join
 from common.ldbc.utils import loadGraph
-from common.random_basis_dataset import RandomBasisDataset, toGT
 
 def load_dataset(name, get_feats = False):
     """ Load real-world datasets, available in PyTorch Geometric.
@@ -239,7 +238,7 @@ class LDBCDataSource(DataSource):
     """ Data Source for the LDBC project data, available here: https://github.com/ldbc/ldbc_snb_datagen_hadoop
     """
 
-    def __init__(self, min_size=3, max_size=30, use_features=False):
+    def __init__(self, min_size=3, max_size=100, use_features=False):
         self.closed = False
         self.min_size = min_size
         self.max_size = max_size
@@ -277,14 +276,10 @@ class LDBCDataSource(DataSource):
             # do we want to keep randomness? TODO: add seed
             # TODO: check if offset and d was useful
             size = random.randint(self.min_size, min(len(graph.G), self.max_size))
-            #print(size)
-            # print(nx.to_dict_of_dicts(graph.G))
             start_node = random.choice(list(graph.G.nodes))
-            # print(start_node)
             neigh = [start_node]
             frontier = list(
                 set(graph.G.neighbors(start_node)) - set(neigh))
-            # print(frontier)
             visited = set([start_node])
             while len(neigh) < size:
                 new_node = random.choice(list(frontier))
@@ -294,29 +289,21 @@ class LDBCDataSource(DataSource):
                 frontier += list(graph.G.neighbors(new_node))
                 frontier = [x for x in frontier if x not in visited]
 
-            #print(neigh)
-
             # anchor node
             graph = self.add_anchor(graph, anchor=neigh[0])
             neigh = graph.G.subgraph(neigh)
-            #print(list(neigh.edges))
             # case: negative query
             if neg and train:
-               # print("negative!!!!!!!!!")
                 neigh = neigh.copy()
                 # TODO: for report note that we removed one case proposed by the authors here
                 non_edges = list(nx.non_edges(neigh))
-                # print(non_edges)
                 if len(non_edges) > 0:
                     for u, v in random.sample(non_edges, random.randint(1,
                                                                         min(len(non_edges), 5))):
                         neigh.add_edge(u, v)
 
-            #print(nx.get_node_attributes(neigh, "x"))
             done = True
 
-        # print(DSGraph(neigh))
-        # print(DSGraph(neigh))
         return graph, DSGraph(neigh)
 
     def add_anchor(self, g, anchor=None):
@@ -324,7 +311,6 @@ class LDBCDataSource(DataSource):
             anchor = random.choice(list(g.G.nodes))
         for v in g.G.nodes:
             if "node_feature" not in g.G.nodes[v]:
-               # print("node_feature")
                 g.G.nodes[v]["node_feature"] = (torch.ones(1) if anchor == v
                                                 else torch.zeros(1))
         return g
@@ -336,7 +322,6 @@ class LDBCDataSource(DataSource):
         neg_target_loader = TorchDataLoader(self.gen_dataset(train=train),
                                             collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
         neg_query_loader = TorchDataLoader(self.gen_dataset(train=train),
-                                           # TODO: batch_size // 2 correct here?
                                            collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
 
         return [pos_target_loader, neg_target_loader, neg_query_loader]
@@ -347,11 +332,9 @@ class LDBCDataSource(DataSource):
         augmenter = feature_preprocess.FeatureAugment()
 
         pos_target = batch_target
-        #print("sample pos")
         pos_target, pos_query = pos_target.apply_transform_multi(
             self.sample_subgraph, train=train, epoch=epoch)
         neg_target = batch_neg_target
-        #print("sample neg")
         _, neg_query = batch_neg_query.apply_transform_multi(self.sample_subgraph, train=train,
                                                              neg=True, epoch=epoch)
 

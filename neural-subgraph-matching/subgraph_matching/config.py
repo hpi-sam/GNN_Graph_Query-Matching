@@ -55,7 +55,7 @@ def parse_encoder(parser, arg_str=None):
                         hidden_dim=64,
                         skip="learnable",
                         dropout=0.0,
-                        n_batches=1000000,
+                        n_batches=1000,
                         opt='adam',   # opt_enc_parser
                         opt_scheduler='none',
                         opt_restart=100,
@@ -90,6 +90,6 @@ def parse_encoder(parser, arg_str=None):
     #                         model_path="ckpt/model.pt",
     #                         tag='',
     #                         val_size=4096,
-    #                         node_anchored=True, use_features=False)
+    #                         node_anchored=True, use_features=False, use_curriculum=False)
 
     # return enc_parser.parse_args(arg_str)

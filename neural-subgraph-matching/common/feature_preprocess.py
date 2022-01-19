@@ -25,7 +25,7 @@ from common import utils
 
 AUGMENT_METHOD = "concat"
 #FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS = [], []
-FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS = ['dataset_attrs'], [1]
+FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS = ['dataset_attrs', "node_degree"], [1,1]
 #FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS = ["identity"], [4]
 #FEATURE_AUGMENT = ["motif_counts"]
 #FEATURE_AUGMENT_DIMS = [73]
@@ -197,11 +197,15 @@ class FeatureAugment(nn.Module):
         return one_hot
 
     def augment(self, dataset):
-        dataset = dataset.apply_transform(self.node_features_base_fun,
-            feature_dim=1)
-        for key, dim in zip(FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS):
-            dataset = dataset.apply_transform(self.node_feature_funs[key], 
-                feature_dim=dim)
+        # Do augmentation of each graph in one step. Using it in different runs of apply_transform results in loss in features, 
+        # because the will overwrite each other
+        def combined_augment(graph):
+            g = self.node_features_base_fun(graph, feature_dim=1)
+            for key, dim in zip(FEATURE_AUGMENT, FEATURE_AUGMENT_DIMS):
+                g = self.node_feature_funs[key](g, dim)
+        
+        dataset = dataset.apply_transform(combined_augment)
+
         return dataset
 
 class Preprocess(nn.Module):
