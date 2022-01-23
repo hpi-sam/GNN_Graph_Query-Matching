@@ -31,7 +31,8 @@ from os import listdir
 from os.path import isfile, join
 from common.ldbc.utils import loadGraph
 
-def load_dataset(name, get_feats = False):
+
+def load_dataset(name, get_feats=False):
     """ Load real-world datasets, available in PyTorch Geometric.
 
     Used as a helper for DiskDataSource.
@@ -71,7 +72,7 @@ def load_dataset(name, get_feats = False):
                     del graph.name
                 if get_feats:
                     graph = pyg_utils.to_networkx(graph,
-                        node_attrs=["x"]).to_undirected()
+                                                  node_attrs=["x"]).to_undirected()
                     for v in graph:
                         graph.nodes[v]["feat"] = graph.nodes[v]["x"]
                 else:
@@ -112,7 +113,7 @@ class OTFSynDataSource(DataSource):
             self.min_size + 1, self.max_size + 1))
 
     def gen_data_loaders(self, size, batch_size, train=True,
-                         use_distributed_sampling=False):
+                         use_distributed_sampling=False, epoch=None):
         loaders = []
         for i in range(2):
             dataset = combined_syn.get_dataset("graph", size // 2,
@@ -238,19 +239,26 @@ class LDBCDataSource(DataSource):
     """ Data Source for the LDBC project data, available here: https://github.com/ldbc/ldbc_snb_datagen_hadoop
     """
 
-    def __init__(self, min_size=3, max_size=100, use_features=False):
+    def __init__(self, min_size=3, max_size=10, use_features=False):
         self.closed = False
         self.min_size = min_size
         self.max_size = max_size
         self.use_features = use_features
 
-    def gen_dataset(self, train):
+    def gen_dataset(self, train, epoch=None):
         setName = "trainFeatures" if self.use_features else "train"
         if not train:
             setName = "testFeatures" if self.use_features else "test"
         path = "./data/"+setName+"/"
         target_graphs = [loadGraph(setName, graph) for graph in listdir(
             path) if isfile(join(path, graph))]
+
+        max_number_of_graphs = None
+        # When epoch is given, curriculum learning should be used
+        if epoch is not None:
+            # TODO: in real curriculum learning only target graphs with specific radius are used
+            max_number_of_graphs = min(
+                self.get_curriculum_factor(epoch), len(target_graphs))
 
         final_target_graphs = []
         # transform the node features into the required structure
@@ -263,19 +271,25 @@ class LDBCDataSource(DataSource):
                     graph.nodes[v]["feat"] = np.array([1])
             final_target_graphs.append(graph)
 
-        dataset = GraphDataset(graphs=final_target_graphs)
+        dataset = GraphDataset(
+            graphs=final_target_graphs[:max_number_of_graphs])
         return dataset
+
+    def get_curriculum_factor(self, epoch):
+        # TODO: align to paper
+        return 2**epoch
 
     # called for each graph of the dataset
     def sample_subgraph(self, graph, offset=0, neg=False, train=True, epoch=None):
         done = False
         while not done:
-            # set the query sizes (TODO: maybe add curriculum learning here)
             d = 1 if train else 0
             #offset = 0
-            # do we want to keep randomness? TODO: add seed
+            max_size = min(
+                max(self.min_size, self.get_curriculum_factor(epoch-1)), self.max_size) if epoch is not None else self.max_size
             # TODO: check if offset and d was useful
-            size = random.randint(self.min_size, min(len(graph.G), self.max_size))
+            size = random.randint(self.min_size, min(
+                len(graph.G), max_size))
             start_node = random.choice(list(graph.G.nodes))
             neigh = [start_node]
             frontier = list(
@@ -316,12 +330,12 @@ class LDBCDataSource(DataSource):
         return g
 
     def gen_data_loaders(self, size, batch_size, train=True,
-                         use_distributed_sampling=False):
-        pos_target_loader = TorchDataLoader(self.gen_dataset(train=train),
+                         use_distributed_sampling=False, epoch=None):
+        pos_target_loader = TorchDataLoader(self.gen_dataset(train=train, epoch=epoch),
                                             collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
-        neg_target_loader = TorchDataLoader(self.gen_dataset(train=train),
+        neg_target_loader = TorchDataLoader(self.gen_dataset(train=train, epoch=epoch),
                                             collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
-        neg_query_loader = TorchDataLoader(self.gen_dataset(train=train),
+        neg_query_loader = TorchDataLoader(self.gen_dataset(train=train, epoch=epoch),
                                            collate_fn=Batch.collate([]), batch_size=batch_size // 2, shuffle=False)
 
         return [pos_target_loader, neg_target_loader, neg_query_loader]

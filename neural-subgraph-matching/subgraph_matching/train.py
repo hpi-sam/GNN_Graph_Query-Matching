@@ -93,10 +93,10 @@ def train(args, model, logger, in_queue, out_queue):
     done = False
     while not done:
         data_source = make_data_source(args)
+        msg, epoch = in_queue.get()
         loaders = data_source.gen_data_loaders(args.eval_interval *
-                                               args.batch_size, args.batch_size, train=True)
+                                               args.batch_size, args.batch_size, train=True, epoch=epoch)
         for batch_target, batch_neg_target, batch_neg_query in zip(*loaders):
-            msg, epoch = in_queue.get()
             if msg == "done":
                 done = True
                 break
