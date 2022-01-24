@@ -20,7 +20,7 @@ class LdbcGenerator:
     def outerQuery(tx):
         result = tx.run("""MATCH (p:person)-[r:KNOWS*1..2]->(p2:person)
         WITH p, COUNT(DISTINCT p2) AS cnt
-        WHERE cnt >= 2 AND cnt <=10
+        WHERE cnt >= 20 AND cnt <=100
         RETURN p.person_id""")
         values = []
         for record in result:
