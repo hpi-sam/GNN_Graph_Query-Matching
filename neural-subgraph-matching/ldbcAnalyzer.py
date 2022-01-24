@@ -3,6 +3,7 @@ import networkx as nx
 import pandas as pd
 import itertools
 from collections import Counter
+from matplotlib import pyplot as plt
 
 
 def analyzeGraph(g):
@@ -33,6 +34,8 @@ def intersection_analysis(df_train, df_test):
     intersection = list(set(nodes_in_train_counted).intersection(set(nodes_in_test_counted)))
     
     print(f"There are {len(nodes_in_train_counted)} different nodes in the train datset and {len(nodes_in_test_counted)} nodes in the test dataset. {len(intersection)} nodes are includeded in both datasets.")
+    
+    sort_key = lambda node: nodes_in_train_counted[node] + nodes_in_test_counted[node]
     df_as_dict = []
 
     for node in sorted(intersection, reverse=True, key=sort_key):
@@ -40,7 +43,8 @@ def intersection_analysis(df_train, df_test):
 
     df = pd.DataFrame(df_as_dict)
     print(df.head().to_markdown())
-    df.plot().figure.savefig("test.jpg")
+    df.hist()
+    plt.savefig("histogram.jpg")
 
 
 if __name__ == "__main__":
