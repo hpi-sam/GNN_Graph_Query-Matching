@@ -33,13 +33,14 @@ def intersection_analysis(df_train, df_test):
     intersection = list(set(nodes_in_train_counted).intersection(set(nodes_in_test_counted)))
     
     print(f"There are {len(nodes_in_train_counted)} different nodes in the train datset and {len(nodes_in_test_counted)} nodes in the test dataset. {len(intersection)} nodes are includeded in both datasets.")
-    print("The following table shows in how many graph those nodes are included.")
-    print("| Node ID | # in train set | # in testset | # overall |")
-    print("|---|---|---|---|")
-    
-    sort_key = lambda node: nodes_in_train_counted[node] + nodes_in_test_counted[node]
-    for node in sorted(intersection, reverse=True, key=sort_key)[:20]:
-        print(f"|{node}|{nodes_in_train_counted[node]}|{nodes_in_test_counted[node]}|{nodes_in_train_counted[node] + nodes_in_test_counted[node]}|")
+    df_as_dict = []
+
+    for node in sorted(intersection, reverse=True, key=sort_key):
+        df_as_dict.append({"#train":nodes_in_train_counted[node], "#test": nodes_in_test_counted[node]})
+
+    df = pd.DataFrame(df_as_dict)
+    print(df.head().to_markdown())
+    df.plot().figure.savefig("test.jpg")
 
 
 if __name__ == "__main__":
