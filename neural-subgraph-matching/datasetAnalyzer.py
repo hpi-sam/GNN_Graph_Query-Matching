@@ -96,20 +96,24 @@ def data2plots(dataset, caseSubfolderName):
 
     eccentricity_histograms = [[histogram.count(eccentricity) for eccentricity in range(0,30)] for histogram in histogram_eccentricities]
     averaged_eccentricity_histogram = [*map(mean, zip(*eccentricity_histograms))]
+    average_of_averaged_eccentricity_histogram = mean(map(lambda x: float(x) * averaged_eccentricity_histogram[x], np.arange(0,30)))
     #print(averaged_eccentricity_histogram)
 
-    plt.hist(averaged_eccentricity_histogram, bins=30, alpha=0.5)
-    plt.title('#Eccentricity avg:' + str(mean(averaged_eccentricity_histogram)))
-    plt.xlabel('#eccentricity')
-    plt.ylabel('count')
+    plt.plot(np.arange(0,30), averaged_eccentricity_histogram)
+    plt.title('#Eccentricity avg:' + str(average_of_averaged_eccentricity_histogram))
+    plt.xlabel('eccentricity')
+    plt.xticks(np.arange(0, 30, step=1.0))
+    plt.ylabel('average counted in graphs')
+    plt.grid()
     plt.savefig('./analysis/' + caseSubfolderName+ "/eccentricity.png", bbox_inches='tight')
     plt.clf()
 
-    graph = data[0]
-    labels = nx.get_node_attributes(graph, 'x')
-    nx.draw(graph, labels=labels)
-    plt.savefig('./analysis/' + caseSubfolderName+ "/testGraph.png", bbox_inches='tight')
-    plt.clf()
+    for i, graph in enumerate(random.sample(data, 5)):
+        graph = data[0]
+        labels = nx.get_node_attributes(graph, 'x')
+        nx.draw(graph, labels=labels)
+        plt.savefig('./analysis/' + caseSubfolderName+ "/testGraph" + str(i) + ".png", bbox_inches='tight')
+        plt.clf()
 
 def caseERGeneratorNodes(target_graph_size, shift_parameter, experiment_run_number):
     # target_graph_size defines the number of nodes for the original baseline target graph
@@ -168,7 +172,7 @@ if __name__ == "__main__":
     shiftParameter_caseERGeneratorNodes = np.arange(1.0, 2.0, 0.2)
     shiftParameter_caseERGeneratorEdges = np.arange(1.0, 2.0, 0.2)
     shiftParameter_caseWSGeneratorEccentricity = np.arange(1.0, 2.0, 0.2)
-    experimentRuns = np.arange(1,6)
+    experimentRuns = np.arange(1,2)
 
     for experiment in experimentRuns:
         for size in target_graph_sizes:
