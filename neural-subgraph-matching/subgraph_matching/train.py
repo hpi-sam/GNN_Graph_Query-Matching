@@ -28,6 +28,7 @@ import pickle
 from itertools import permutations
 import argparse
 import time
+import wandb
 HYPERPARAM_SEARCH = False
 HYPERPARAM_SEARCH_N_TRIALS = None   # how many grid search trials to run
 #    (set to None for exhaustive search)
@@ -53,9 +54,12 @@ def build_model(args):
     return model
 
 
-def make_data_source(args):
+def make_data_source(args, exp_args=None):
     toks = args.dataset.split("-")
-    if toks[0] == "ldbc":
+    if exp_args is not None:
+        data_source = data.ExpOTFSynDataSource(
+            node_anchored=args.node_anchored, exp_args=exp_args)
+    elif toks[0] == "ldbc":
         data_source = data.LDBCDataSource(use_features=args.use_features)
     elif toks[0] == "syn":
         if len(toks) == 1 or toks[1] == "balanced":
@@ -78,7 +82,7 @@ def make_data_source(args):
     return data_source
 
 
-def train(args, model, logger, in_queue, out_queue):
+def train(args, model, logger, in_queue, out_queue, exp_args=None):
     """Train the order embedding model.
 
     args: Commandline arguments
@@ -92,11 +96,11 @@ def train(args, model, logger, in_queue, out_queue):
 
     done = False
     while not done:
-        data_source = make_data_source(args)
-        msg, epoch = in_queue.get()
+        data_source = make_data_source(args, exp_args)
         loaders = data_source.gen_data_loaders(args.eval_interval *
-                                               args.batch_size, args.batch_size, train=True, epoch=epoch)
+                                               args.batch_size, args.batch_size, train=True)
         for batch_target, batch_neg_target, batch_neg_query in zip(*loaders):
+            msg, _ = in_queue.get()
             if msg == "done":
                 done = True
                 break
@@ -104,7 +108,7 @@ def train(args, model, logger, in_queue, out_queue):
             model.train()
             model.zero_grad()
             pos_a, pos_b, neg_a, neg_b = data_source.gen_batch(batch_target,
-                                                               batch_neg_target, batch_neg_query, True, epoch=epoch if args.use_curriculum else None)
+                                                               batch_neg_target, batch_neg_query, True)
             emb_pos_a, emb_pos_b = model.emb_model(
                 pos_a), model.emb_model(pos_b)
             emb_neg_a, emb_neg_b = model.emb_model(
@@ -140,7 +144,7 @@ def train(args, model, logger, in_queue, out_queue):
             out_queue.put(("step", (train_loss, train_acc)))
 
 
-def train_loop(args):
+def train_loop(args, exp_args=None):
     if not os.path.exists(os.path.dirname(args.model_path)):
         os.makedirs(os.path.dirname(args.model_path))
     if not os.path.exists("plots/"):
@@ -165,7 +169,7 @@ def train_loop(args):
     else:
         clf_opt = None
 
-    data_source = make_data_source(args)
+    data_source = make_data_source(args, exp_args=exp_args)
     loaders = data_source.gen_data_loaders(args.val_size, args.batch_size,
                                            train=False, use_distributed_sampling=False)
     test_pts = []
@@ -182,7 +186,7 @@ def train_loop(args):
     workers = []
     for i in range(args.n_workers):
         worker = mp.Process(target=train, args=(args, model, data_source,
-                                                in_queue, out_queue))
+                                                in_queue, out_queue, exp_args))
         worker.start()
         workers.append(worker)
 
@@ -190,7 +194,8 @@ def train_loop(args):
         validation(args, model, test_pts, logger, 0, 0, verbose=True)
     else:
         batch_n = 0
-        for epoch in range(args.n_batches // args.eval_interval):
+        n_batches = exp_args['batches'] if exp_args is not None else args.n_batches
+        for epoch in range(n_batches // args.eval_interval):
             for i in range(args.eval_interval):
                 in_queue.put(("step", epoch))
             for i in range(args.eval_interval):
@@ -201,7 +206,12 @@ def train_loop(args):
                 logger.add_scalar("Loss/train", train_loss, batch_n)
                 logger.add_scalar("Accuracy/train", train_acc, batch_n)
                 batch_n += 1
-            validation(args, model, test_pts, logger, batch_n, epoch)
+                wandb.log({
+                    "Loss/train": train_loss,
+                    "Accuracy/train": train_acc,
+                })
+            validation(args, model, test_pts, logger,
+                       batch_n, epoch, exp=exp_args)
 
     for i in range(args.n_workers):
         in_queue.put(("done", None))
@@ -209,7 +219,7 @@ def train_loop(args):
         worker.join()
 
 
-def main(force_test=False):
+def main(force_test=False, exp_args=None):
     start = time.time()
     mp.set_start_method("spawn", force=True)
     parser = (argparse.ArgumentParser(description='Order embedding arguments')
@@ -232,7 +242,7 @@ def main(force_test=False):
             print(hparam_trial)
             train_loop(hparam_trial)
     else:
-        train_loop(args)
+        train_loop(args, exp_args)
     _time = int(time.time() - start)
     print(f"Finished in {_time} s")
 

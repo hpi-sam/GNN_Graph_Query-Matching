@@ -177,7 +177,6 @@ def get_WSgeneratorEccentricity(sizes, size_prob=None, dataset_len=None, shift_p
     return generator
 
 def get_dataset(task, dataset_len, sizes, generatorName="ERNODES", size_prob=None, shift_parameter=1.0, **kwargs):
-    print(f"datset_len: {dataset_len}")
     if generatorName == "ERNODES":
         generator = get_ERgeneratorNodes(sizes, size_prob=size_prob,
                                   dataset_len=dataset_len, shift_parameter=shift_parameter)

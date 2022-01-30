@@ -10,3 +10,4 @@ torch_geometric == 1.4.3
 test_tube == 0.7.5
 tqdm == 4.43.0
 neo4j
+wandb

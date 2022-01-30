@@ -4,12 +4,13 @@ from datetime import datetime
 from sklearn.metrics import roc_auc_score, confusion_matrix
 from sklearn.metrics import precision_recall_curve, average_precision_score, f1_score, auc
 import torch
+import wandb
 
 USE_ORCA_FEATS = False  # whether to use orca motif counts along with embeddings
 MAX_MARGIN_SCORE = 1e9  # a very large margin score to given orca constraints
 
 
-def validation(args, model, test_pts, logger, batch_n, epoch, verbose=False):
+def validation(args, model, test_pts, logger, batch_n, epoch, verbose=False, exp=None):
     # test on new motifs
     model.eval()
     all_raw_preds, all_preds, all_labels = [], [], []
@@ -98,6 +99,20 @@ def validation(args, model, test_pts, logger, batch_n, epoch, verbose=False):
                                                   acc, prec, recall, auroc, avg_prec, f1,
                                                   tn, fp, fn, tp))
 
+    if exp is not None:
+        wandb.log({
+            "Accuracy/test": acc,
+            "Precision/test": prec,
+            "Recall/test": recall,
+            "AUROC/test": auroc,
+            "AvgPrec/test": avg_prec,
+            "F1/test": f1,
+            "TP/test": tp,
+            "TN/test": tn,
+            "FP/test": fp,
+            "FN/test": fn,
+        })
+
     if not args.test:
         logger.add_scalar("Accuracy/test", acc, batch_n)
         logger.add_scalar("Precision/test", prec, batch_n)
@@ -108,8 +123,10 @@ def validation(args, model, test_pts, logger, batch_n, epoch, verbose=False):
         logger.add_scalar("TN/test", tn, batch_n)
         logger.add_scalar("FP/test", fp, batch_n)
         logger.add_scalar("FN/test", fn, batch_n)
-        print("Saving {}".format(args.model_path))
-        torch.save(model.state_dict(), args.model_path)
+
+        if exp is None:
+            print("Saving {}".format(args.model_path))
+            torch.save(model.state_dict(), args.model_path)
 
     if verbose:
         conf_mat_examples = defaultdict(list)
