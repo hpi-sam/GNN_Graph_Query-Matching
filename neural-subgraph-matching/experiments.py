@@ -218,7 +218,7 @@ def setup_remote_logging(args):
 
 def train(loader, target_size, experiment, shift_param):
     query_size = 5
-    batches_per_experiment = 1000
+    batches_per_experiment = 6000
     args = {'query_size': query_size, 'target_size': target_size, 'dataset': loader.dataset,
             'experiment': experiment, 'shift_param': shift_param, 'batches': batches_per_experiment}
     setup_remote_logging(args)
