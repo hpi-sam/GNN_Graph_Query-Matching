@@ -1,17 +1,18 @@
-import sys
-# sys.path.append("/Users/nicolashoecker/Downloads/ldbcdataset/gnn_graph-counting_query-matching/neural-subgraph-matching/")
-from common import data
-from common import utils
-import networkx as nx
-from common import combined_syn
-import numpy as np
-import torch
-from torch.utils.data import DataLoader as TorchDataLoader
-from deepsnap.batch import Batch
-from deepsnap.graph import Graph
-from deepsnap.dataset import GraphDataset
+import matplotlib
+matplotlib.use('Agg')
+
 from common.ldbc.utils import visualizeGraph
-import matplotlib.pyplot as plt
+from deepsnap.dataset import GraphDataset
+from deepsnap.graph import Graph
+from deepsnap.batch import Batch
+from torch.utils.data import DataLoader as TorchDataLoader
+import torch
+import numpy as np
+from common import combined_syn
+import networkx as nx
+from common import utils
+from common import data
+import sys
 from common.ldbc.utils import loadGraph
 from statistics import mean
 import os
@@ -19,9 +20,10 @@ from os import listdir
 from os.path import isfile, join
 import random
 import pandas as pd
-from statistics import mean
 from subgraph_matching.train import main as train_model
 import wandb
+import matplotlib.pyplot as plt
+# sys.path.append("/Users/nicolashoecker/Downloads/ldbcdataset/gnn_graph-counting_query-matching/neural-subgraph-matching/")
 
 dataset_size = 4096
 
@@ -226,6 +228,7 @@ def train(loader, target_size, experiment, shift_param):
 
 
 if __name__ == "__main__":
+    print("Starting experiments...")
     target_graph_sizes = np.arange(5, 30, 1)
     shiftParameter_caseERGeneratorNodes = np.arange(1.0, 2.0, 0.2)
     shiftParameter_caseERGeneratorEdges = np.arange(1.0, 2.0, 0.2)
