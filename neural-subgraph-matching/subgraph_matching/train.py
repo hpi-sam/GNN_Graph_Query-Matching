@@ -90,6 +90,7 @@ def train(args, model, logger, in_queue, out_queue, exp_args=None):
     in_queue: input queue to an intersection computation worker
     out_queue: output queue to an intersection computation worker
     """
+    torch.set_num_threads(1)
     scheduler, opt = utils.build_optimizer(args, model.parameters())
     if args.method_type == "order":
         clf_opt = optim.Adam(model.clf_model.parameters(), lr=args.lr)

@@ -393,7 +393,10 @@ class ExpOTFSynDataSource(DataSource):
                     set(graph.G.neighbors(start_node)) - set(neigh))
                 visited = set([start_node])
                 while len(neigh) < size:
-                    new_node = random.choice(list(frontier))
+                    try:
+                        new_node = random.choice(list(frontier))
+                    except:
+                        raise Exception("Error: too few target graph nodes left for query size.")
                     assert new_node not in neigh
                     neigh.append(new_node)
                     visited.add(new_node)
