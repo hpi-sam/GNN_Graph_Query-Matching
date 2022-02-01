@@ -56,12 +56,12 @@ def build_model(args):
 
 def make_data_source(args, exp_args=None):
     toks = args.dataset.split("-")
-    if exp_args is not None:
-        data_source = data.ExpOTFSynDataSource(
-            node_anchored=args.node_anchored, exp_args=exp_args)
-    elif toks[0] == "ldbc":
-        data_source = data.LDBCDataSource(use_features=args.use_features)
-    elif toks[0] == "syn":
+    # if exp_args is not None:
+    #     data_source = data.ExpOTFSynDataSource(
+    #         node_anchored=args.node_anchored, exp_args=exp_args)
+    # elif toks[0] == "ldbc":
+    #     data_source = data.LDBCDataSource(use_features=args.use_features)
+    if toks[0] == "syn":
         if len(toks) == 1 or toks[1] == "balanced":
             data_source = data.OTFSynDataSource(
                 node_anchored=args.node_anchored)
@@ -161,6 +161,10 @@ def train_loop(args, exp_args=None):
     args_str = ".".join(["{}={}".format(k, v)
                          for k, v in sorted(vars(args).items()) if k in record_keys])
     logger = SummaryWriter(comment=args_str)
+
+    exp_args = {'batches': 6000}
+    wandb.init(project="neural-subgraph-matching-experiments",
+               entity="neural-subgraph-matching", reinit=True, tags=["debug-2"])
 
     model = build_model(args)
     model.share_memory()

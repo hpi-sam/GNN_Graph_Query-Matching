@@ -136,14 +136,67 @@ class PowerLawClusterGenerator(dataset.Generator):
             num_nodes, max_m))
         return graph
 
+class ERGenerator(dataset.Generator):
+    def __init__(self, sizes, p_alpha=1.3, **kwargs):
+        super(ERGenerator, self).__init__(sizes, **kwargs)
+        self.p_alpha = p_alpha
+
+    def generate(self, size=None):
+        num_nodes = self._get_size(size)
+        # p follows beta distribution with mean = log2(num_graphs) / num_graphs
+        alpha = self.p_alpha
+        mean = np.log2(num_nodes) / num_nodes
+        beta = alpha / mean - alpha
+        p = np.random.beta(alpha, beta)
+        graph = nx.gnp_random_graph(num_nodes, p)
+
+        while not nx.is_connected(graph):
+            p = np.random.beta(alpha, beta)
+            graph = nx.gnp_random_graph(num_nodes, p)
+        logging.debug('Generated {}-node E-R graphs with average p: {}'.format(
+                num_nodes, mean))
+        return graph
+
+class WSGenerator(dataset.Generator):
+    def __init__(self, sizes, density_alpha=1.3, 
+            rewire_alpha=2, rewire_beta=2, **kwargs):
+        super(WSGenerator, self).__init__(sizes, **kwargs)
+        self.density_alpha = density_alpha
+        self.rewire_alpha = rewire_alpha
+        self.rewire_beta = rewire_beta
+    
+    def generate(self, size=None):
+        num_nodes = self._get_size(size)
+        curr_num_graphs = 0
+
+        density_alpha = self.density_alpha
+        density_mean = np.log2(num_nodes) / num_nodes
+        density_beta = density_alpha / density_mean - density_alpha
+
+        rewire_alpha = self.rewire_alpha
+        rewire_beta = self.rewire_beta
+        while curr_num_graphs < 1:
+            k = int(np.random.beta(density_alpha, density_beta) * num_nodes)
+            k = max(k, 2)
+            p = np.random.beta(rewire_alpha, rewire_beta)
+            try:
+                graph = nx.connected_watts_strogatz_graph(num_nodes, k, p)
+                curr_num_graphs += 1
+            except:
+                pass
+        logging.debug('Generated {}-node W-S graph with average density: {}'.format(
+                num_nodes, density_mean))
+        return graph
 
 def get_generator(sizes, size_prob=None, dataset_len=None):
     #gen_prob = [1/3.5, 1/3.5, 1/3.5, 0.5/3.5]
     generator = dataset.EnsembleGenerator(
-        [ERGenerator(sizes, size_prob=size_prob),
+        [
+            ERGenerator(sizes, size_prob=size_prob),
             WSGenerator(sizes, size_prob=size_prob),
-            BAGenerator(sizes, size_prob=size_prob),
-            PowerLawClusterGenerator(sizes, size_prob=size_prob)],
+            # BAGenerator(sizes, size_prob=size_prob),
+            # PowerLawClusterGenerator(sizes, size_prob=size_prob)
+            ],
         # gen_prob=gen_prob,
         dataset_len=dataset_len)
     # print(generator)
@@ -176,18 +229,24 @@ def get_WSgeneratorEccentricity(sizes, size_prob=None, dataset_len=None, shift_p
     # print(generator)
     return generator
 
-def get_dataset(task, dataset_len, sizes, generatorName="ERNODES", size_prob=None, shift_parameter=1.0, **kwargs):
-    if generatorName == "ERNODES":
-        generator = get_ERgeneratorNodes(sizes, size_prob=size_prob,
-                                  dataset_len=dataset_len, shift_parameter=shift_parameter)
-    if generatorName == "EREDGES":
-        generator = get_ERgeneratorEdges(sizes, size_prob=size_prob,
-                                  dataset_len=dataset_len, shift_parameter=shift_parameter)
-    if generatorName == "WSECCENTRICITY":
-        generator = get_WSgeneratorEccentricity(sizes, size_prob=size_prob,
-                                  dataset_len=dataset_len, shift_parameter=shift_parameter)
+def get_dataset(task, dataset_len, sizes, size_prob=None, **kwargs):
+    generator = get_generator(sizes, size_prob=size_prob,
+        dataset_len=dataset_len)
     return dataset.GraphDataset(
         None, task=task, generator=generator, **kwargs)
+
+# def get_dataset(task, dataset_len, sizes, generatorName="ERNODES", size_prob=None, shift_parameter=1.0, **kwargs):
+#     if generatorName == "ERNODES":
+#         generator = get_ERgeneratorNodes(sizes, size_prob=size_prob,
+#                                   dataset_len=dataset_len, shift_parameter=shift_parameter)
+#     if generatorName == "EREDGES":
+#         generator = get_ERgeneratorEdges(sizes, size_prob=size_prob,
+#                                   dataset_len=dataset_len, shift_parameter=shift_parameter)
+#     if generatorName == "WSECCENTRICITY":
+#         generator = get_WSgeneratorEccentricity(sizes, size_prob=size_prob,
+#                                   dataset_len=dataset_len, shift_parameter=shift_parameter)
+#     return dataset.GraphDataset(
+#         None, task=task, generator=generator, **kwargs)
 
 
 def main():
