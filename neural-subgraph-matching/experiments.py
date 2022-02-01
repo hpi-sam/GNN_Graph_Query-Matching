@@ -236,7 +236,7 @@ def train(pos_loader, neg_loader, target_size, experiment, shift_param):
 
 if __name__ == "__main__":
     print("Starting experiments...")
-    # target_graph_sizes = np.arange(5, 30, 1)
+    # target_graph_sizes = reversed(np.arange(5, 30, 1))
     target_graph_sizes = [10]
     # shiftParameter_caseERGeneratorNodes = np.arange(1.0, 2.0, 0.2)
     # shiftParameter_caseERGeneratorEdges = np.arange(1.0, 2.0, 0.2)
@@ -255,8 +255,11 @@ if __name__ == "__main__":
                     size, shift_param, experiment, True)
                 neg_loader, experiment_name = caseWSGeneratorEccentricity(
                     size, shift_param, experiment, False)
-                train(pos_loader, neg_loader, size,
-                      experiment_name, shift_param)
+                try:
+                    train(pos_loader, neg_loader, size,
+                          experiment_name, shift_param)
+                except:
+                    print("Experiment" + str(experiment_name) + "failed.")
                 if 1./shift_param == 1.0:
                     continue
                 print(
@@ -265,8 +268,11 @@ if __name__ == "__main__":
                     size, 1.0/shift_param, experiment, True)
                 neg_loader, experiment_name = caseWSGeneratorEccentricity(
                     size, 1.0/shift_param, experiment, False)
-                train(pos_loader, neg_loader, size,
-                      experiment_name, 1.0/shift_param)
+                try:
+                    train(pos_loader, neg_loader, size,
+                          experiment_name, 1.0/shift_param)
+                except:
+                    print("Experiment" + str(experiment_name) + "failed.")
 
             for shift_param in shiftParameter_caseERGeneratorNodes:
                 print(f"size: {size}, shiftParameter: {shift_param}, nodes")
@@ -284,8 +290,11 @@ if __name__ == "__main__":
                     size, 1.0/shift_param, experiment, True)
                 neg_loader, experiment_name = caseERGeneratorNodes(
                     size, 1.0/shift_param, experiment, False)
-                train(pos_loader, neg_loader, size,
-                      experiment_name, 1.0/shift_param)
+                try:
+                    train(pos_loader, neg_loader, size,
+                          experiment_name, 1.0/shift_param)
+                except:
+                    print("Experiment" + str(experiment_name) + "failed.")
 
             # for shift_param in shiftParameter_caseERGeneratorEdges:
             #     print(f"size: {size}, shiftParameter: {shift_param}, edges")
@@ -293,8 +302,11 @@ if __name__ == "__main__":
             #         size, shift_param, experiment, True)
             #     neg_loader, experiment_name = caseERGeneratorEdges(
             #         size, shift_param, experiment, False)
-            #     train(pos_loader, neg_loader, size,
-            #           experiment_name, shift_param)
+            #     try:
+            #         train(pos_loader, neg_loader, size,
+            #               experiment_name, shift_param)
+            #     except:
+            #         print("Experiment" + str(experiment_name) + "failed.")
             #     if 1./shift_param == 1.0:
             #         continue
             #     print(
@@ -303,8 +315,11 @@ if __name__ == "__main__":
             #         size, 1.0/shift_param, experiment, True)
             #     neg_loader, experiment_name = caseERGeneratorEdges(
             #         size, 1.0/shift_param, experiment, False)
-            #     train(pos_loader, neg_loader, size,
-            #           experiment_name, 1.0/shift_param)
+            #     try:
+            #         train(pos_loader, neg_loader, size,
+            #               experiment_name, 1.0/shift_param)
+            #     except:
+            #         print("Experiment" + str(experiment_name) + "failed.")
 
 
 # edge increase/decrease: increase/decrease the beta distribution by a factor p, so that mean is between [0,1]
