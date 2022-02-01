@@ -1,28 +1,28 @@
+import matplotlib.pyplot as plt
+import wandb
+from subgraph_matching.train import main as train_model
+import pandas as pd
+import random
+from os.path import isfile, join
+from os import listdir
+import os
+from statistics import mean
+from common.ldbc.utils import loadGraph
+import sys
+from common import data
+from common import utils
+import networkx as nx
+from common import combined_syn
+import numpy as np
+import torch
+from torch.utils.data import DataLoader as TorchDataLoader
+from deepsnap.batch import Batch
+from deepsnap.graph import Graph
+from deepsnap.dataset import GraphDataset
+from common.ldbc.utils import visualizeGraph
 import matplotlib
 matplotlib.use('Agg')
 
-from common.ldbc.utils import visualizeGraph
-from deepsnap.dataset import GraphDataset
-from deepsnap.graph import Graph
-from deepsnap.batch import Batch
-from torch.utils.data import DataLoader as TorchDataLoader
-import torch
-import numpy as np
-from common import combined_syn
-import networkx as nx
-from common import utils
-from common import data
-import sys
-from common.ldbc.utils import loadGraph
-from statistics import mean
-import os
-from os import listdir
-from os.path import isfile, join
-import random
-import pandas as pd
-from subgraph_matching.train import main as train_model
-import wandb
-import matplotlib.pyplot as plt
 # sys.path.append("/Users/nicolashoecker/Downloads/ldbcdataset/gnn_graph-counting_query-matching/neural-subgraph-matching/")
 
 dataset_size = 4096
@@ -135,7 +135,7 @@ def data2plots(dataset, caseSubfolderName):
         plt.clf()
 
 
-def caseERGeneratorNodes(target_graph_size, shift_parameter, experiment_run_number):
+def caseERGeneratorNodes(target_graph_size, shift_parameter, experiment_run_number, pos):
     # target_graph_size defines the number of nodes for the original baseline target graph
     # shift_parameter defines the increase or decrease of number of nodes as a factor with respect to the original number of nodes
     # the number of edges are rescaled to stay the same
@@ -151,13 +151,14 @@ def caseERGeneratorNodes(target_graph_size, shift_parameter, experiment_run_numb
         []), batch_size=4096, shuffle=False)
     # save statistics
     experiment_name = "caseERGeneratorNodes" + "_targetGraphSize_"+str(target_graph_size) + "_shiftParameter_"+str(shift_parameter) + \
-        "_experimentRun_" + str(experiment_run_number)
+        "_experimentRun_" + str(experiment_run_number) + \
+        ("_pos" if pos else "_neg")
     data2plots(dataloader, experiment_name)
     # return dataloader
     return dataloader, experiment_name
 
 
-def caseERGeneratorEdges(target_graph_size, shift_parameter, experiment_run_number):
+def caseERGeneratorEdges(target_graph_size, shift_parameter, experiment_run_number, pos):
     # target_graph_size defines the number of nodes
     # shift_parameter defines the increase or decrease of number of edges as a factor with respect to the original number of edges
 
@@ -172,13 +173,14 @@ def caseERGeneratorEdges(target_graph_size, shift_parameter, experiment_run_numb
         []), batch_size=4096, shuffle=False)
     # save statistics
     experiment_name = "caseERGeneratorEdges" + "_targetGraphSize_"+str(target_graph_size) + "_shiftParameter_"+str(shift_parameter) + \
-        "_experimentRun_" + str(experiment_run_number)
+        "_experimentRun_" + str(experiment_run_number) + \
+        ("_pos" if pos else "_neg")
     data2plots(dataloader, experiment_name)
     # return dataloader
     return dataloader, experiment_name
 
 
-def caseWSGeneratorEccentricity(target_graph_size, shift_parameter, experiment_run_number):
+def caseWSGeneratorEccentricity(target_graph_size, shift_parameter, experiment_run_number, pos):
     # target_graph_size defines the number of nodes
     # shift_parameter influences the eccentricity via increase/decrease of connected nodes
 
@@ -193,7 +195,9 @@ def caseWSGeneratorEccentricity(target_graph_size, shift_parameter, experiment_r
         []), batch_size=4096, shuffle=False)
     # save statistics
     experiment_name = "caseWSGeneratorEccentricity" + "_targetGraphSize_"+str(target_graph_size) + "_shiftParameter_"+str(shift_parameter) + \
-        "_experimentRun_" + str(experiment_run_number)
+        "_experimentRun_" + str(experiment_run_number) + \
+        ("_pos" if pos else "_neg")
+
     data2plots(dataloader, experiment_name)
     # return dataloader
     return dataloader, experiment_name
@@ -201,8 +205,10 @@ def caseWSGeneratorEccentricity(target_graph_size, shift_parameter, experiment_r
 
 def setup_remote_logging(args):
     wandb.init(project="neural-subgraph-matching-experiments",
-               entity="neural-subgraph-matching", reinit=True)
-    experiment = args['experiment'].split('_')
+               entity="neural-subgraph-matching", reinit=True, tags=["debug-1"])
+    experiment = args['experiment'].split(
+        '_')[:len(args['experiment'].split('_'))-1]
+
     wandb.config.update({
         'query_size': args['query_size'],
         'target_size': args['target_size'],
@@ -211,17 +217,18 @@ def setup_remote_logging(args):
         'experiment_run': experiment[-1],
         'generator': experiment[0]
     })
-    wandb.run.name = args['experiment']
+    wandb.run.name = experiment
+
     analysis = [f for f in listdir(
                 './analysis/' + args['experiment'] + "/") if isfile(join('./analysis/' + args['experiment'] + "/", f))]
     for f in analysis:
         wandb.save('./analysis/' + args['experiment'] + "/" + f)
 
 
-def train(loader, target_size, experiment, shift_param):
+def train(pos_loader, neg_loader, target_size, experiment, shift_param):
     query_size = 5
     batches_per_experiment = 6000
-    args = {'query_size': query_size, 'target_size': target_size, 'dataset': loader.dataset,
+    args = {'query_size': query_size, 'target_size': target_size, 'pos_dataset': pos_loader.dataset, 'neg_dataset': neg_loader.dataset,
             'experiment': experiment, 'shift_param': shift_param, 'batches': batches_per_experiment}
     setup_remote_logging(args)
     train_model(exp_args=args)
@@ -229,10 +236,14 @@ def train(loader, target_size, experiment, shift_param):
 
 if __name__ == "__main__":
     print("Starting experiments...")
-    target_graph_sizes = np.arange(5, 30, 1)
-    shiftParameter_caseERGeneratorNodes = np.arange(1.0, 2.0, 0.2)
-    shiftParameter_caseERGeneratorEdges = np.arange(1.0, 2.0, 0.2)
-    shiftParameter_caseWSGeneratorEccentricity = np.arange(1.0, 2.0, 0.2)
+    # target_graph_sizes = np.arange(5, 30, 1)
+    target_graph_sizes = [10]
+    # shiftParameter_caseERGeneratorNodes = np.arange(1.0, 2.0, 0.2)
+    # shiftParameter_caseERGeneratorEdges = np.arange(1.0, 2.0, 0.2)
+    # shiftParameter_caseWSGeneratorEccentricity = np.arange(1.0, 2.0, 0.2)
+    shiftParameter_caseERGeneratorNodes = [1.0]
+    shiftParameter_caseERGeneratorEdges = [1.0]
+    shiftParameter_caseWSGeneratorEccentricity = [1.0]
     experimentRuns = np.arange(1, 2)
 
     for experiment in experimentRuns:
@@ -240,42 +251,60 @@ if __name__ == "__main__":
             for shift_param in shiftParameter_caseWSGeneratorEccentricity:
                 print(
                     f"size: {size}, shiftParameter: {shift_param}, eccentricity")
-                loader, experiment_name = caseWSGeneratorEccentricity(
-                    size, shift_param, experiment)
-                train(loader, size, experiment_name, shift_param)
+                pos_loader, experiment_name = caseWSGeneratorEccentricity(
+                    size, shift_param, experiment, True)
+                neg_loader, experiment_name = caseWSGeneratorEccentricity(
+                    size, shift_param, experiment, False)
+                train(pos_loader, neg_loader, size,
+                      experiment_name, shift_param)
                 if 1./shift_param == 1.0:
                     continue
                 print(
                     f"size: {size}, shiftParameter: {1.0/shift_param}, eccentricity")
-                loader, experiment_name = caseWSGeneratorEccentricity(
-                    size, 1.0/shift_param, experiment)
-                train(loader, size, experiment_name, 1.0/shift_param)
+                pos_loader, experiment_name = caseWSGeneratorEccentricity(
+                    size, 1.0/shift_param, experiment, True)
+                neg_loader, experiment_name = caseWSGeneratorEccentricity(
+                    size, 1.0/shift_param, experiment, False)
+                train(pos_loader, neg_loader, size,
+                      experiment_name, 1.0/shift_param)
 
             for shift_param in shiftParameter_caseERGeneratorNodes:
                 print(f"size: {size}, shiftParameter: {shift_param}, nodes")
-                loader, experiment_name = caseERGeneratorNodes(
-                    size, shift_param, experiment)
-                train(loader, size, experiment_name, shift_param)
+                pos_loader, experiment_name = caseERGeneratorNodes(
+                    size, shift_param, experiment, True)
+                neg_loader, experiment_name = caseERGeneratorNodes(
+                    size, shift_param, experiment, False)
+                train(pos_loader, neg_loader, size,
+                      experiment_name, shift_param)
                 if 1./shift_param == 1.0:
                     continue
                 print(
                     f"size: {size}, shiftParameter: {1.0/shift_param}, nodes")
-                loader, experiment_name = caseERGeneratorNodes(
-                    size, 1.0/shift_param, experiment)
-                train(loader, size, experiment_name, 1.0/shift_param)
+                pos_loader, experiment_name = caseERGeneratorNodes(
+                    size, 1.0/shift_param, experiment, True)
+                neg_loader, experiment_name = caseERGeneratorNodes(
+                    size, 1.0/shift_param, experiment, False)
+                train(pos_loader, neg_loader, size,
+                      experiment_name, 1.0/shift_param)
 
-            for shift_param in shiftParameter_caseERGeneratorEdges:
-                print(f"size: {size}, shiftParameter: {shift_param}, edges")
-                loader, experiment_name = caseERGeneratorEdges(
-                    size, shift_param, experiment)
-                train(loader, size, experiment_name, shift_param)
-                if 1./shift_param == 1.0:
-                    continue
-                print(
-                    f"size: {size}, shiftParameter: {1.0/shift_param}, edges")
-                loader, experiment_name = caseERGeneratorEdges(
-                    size, 1.0/shift_param, experiment)
-                train(loader, size, experiment_name, 1.0/shift_param)
+            # for shift_param in shiftParameter_caseERGeneratorEdges:
+            #     print(f"size: {size}, shiftParameter: {shift_param}, edges")
+            #     pos_loader, experiment_name = caseERGeneratorEdges(
+            #         size, shift_param, experiment, True)
+            #     neg_loader, experiment_name = caseERGeneratorEdges(
+            #         size, shift_param, experiment, False)
+            #     train(pos_loader, neg_loader, size,
+            #           experiment_name, shift_param)
+            #     if 1./shift_param == 1.0:
+            #         continue
+            #     print(
+            #         f"size: {size}, shiftParameter: {1.0/shift_param}, edges")
+            #     pos_loader, experiment_name = caseERGeneratorEdges(
+            #         size, 1.0/shift_param, experiment, True)
+            #     neg_loader, experiment_name = caseERGeneratorEdges(
+            #         size, 1.0/shift_param, experiment, False)
+            #     train(pos_loader, neg_loader, size,
+            #           experiment_name, 1.0/shift_param)
 
 
 # edge increase/decrease: increase/decrease the beta distribution by a factor p, so that mean is between [0,1]

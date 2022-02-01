@@ -358,16 +358,18 @@ class ExpOTFSynDataSource(DataSource):
         self.min_size = exp_args['target_size']
         self.query_size = exp_args['query_size']
         self.node_anchored = node_anchored
-        self.dataset = exp_args['dataset']
+        self.pos_dataset = exp_args['pos_dataset']
+        self.neg_dataset = exp_args['neg_dataset']
 
     def gen_data_loaders(self, size, batch_size, train=True,
                          use_distributed_sampling=False):
         loaders = []
         for i in range(2):
+            dataset = self.pos_dataset if i == 0 else self.neg_dataset
             sampler = torch.utils.data.distributed.DistributedSampler(
-                self.dataset, num_replicas=hvd.size(), rank=hvd.rank()) if \
+                dataset, num_replicas=hvd.size(), rank=hvd.rank()) if \
                 use_distributed_sampling else None
-            loaders.append(TorchDataLoader(self.dataset,
+            loaders.append(TorchDataLoader(dataset,
                                            collate_fn=Batch.collate([]), batch_size=batch_size // 2 if i
                                            == 0 else batch_size // 2,
                                            sampler=sampler, shuffle=False))
