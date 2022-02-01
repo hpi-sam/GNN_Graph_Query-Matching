@@ -217,7 +217,7 @@ def setup_remote_logging(args):
         'experiment_run': experiment[-1],
         'generator': experiment[0]
     })
-    wandb.run.name = experiment
+    wandb.run.name = "_".join(experiment)
 
     analysis = [f for f in listdir(
                 './analysis/' + args['experiment'] + "/") if isfile(join('./analysis/' + args['experiment'] + "/", f))]
