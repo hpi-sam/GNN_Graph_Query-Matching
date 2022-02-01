@@ -1,4 +1,6 @@
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+
 import wandb
 from subgraph_matching.train import main as train_model
 import pandas as pd
@@ -20,8 +22,7 @@ from deepsnap.batch import Batch
 from deepsnap.graph import Graph
 from deepsnap.dataset import GraphDataset
 from common.ldbc.utils import visualizeGraph
-import matplotlib
-matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 # sys.path.append("/Users/nicolashoecker/Downloads/ldbcdataset/gnn_graph-counting_query-matching/neural-subgraph-matching/")
 
