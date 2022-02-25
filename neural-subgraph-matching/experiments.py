@@ -23,8 +23,7 @@ from deepsnap.graph import Graph
 from deepsnap.dataset import GraphDataset
 from common.ldbc.utils import visualizeGraph
 import matplotlib.pyplot as plt
-
-# sys.path.append("/Users/nicolashoecker/Downloads/ldbcdataset/gnn_graph-counting_query-matching/neural-subgraph-matching/")
+import math
 
 dataset_size = 4096
 
@@ -206,7 +205,7 @@ def caseWSGeneratorEccentricity(target_graph_size, shift_parameter, experiment_r
 
 def setup_remote_logging(args):
     wandb.init(project="neural-subgraph-matching-experiments",
-               entity="neural-subgraph-matching", reinit=True, tags=["debug-1"])
+               entity="neural-subgraph-matching", reinit=True)
     experiment = args['experiment'].split(
         '_')[:len(args['experiment'].split('_'))-1]
 
@@ -227,25 +226,23 @@ def setup_remote_logging(args):
 
 
 def train(pos_loader, neg_loader, target_size, experiment, shift_param):
-    query_size = 5
+    LOG_WANDB = False
+    query_size = math.ceil(target_size / 2)
     batches_per_experiment = 6000
     args = {'query_size': query_size, 'target_size': target_size, 'pos_dataset': pos_loader.dataset, 'neg_dataset': neg_loader.dataset,
-            'experiment': experiment, 'shift_param': shift_param, 'batches': batches_per_experiment}
-    setup_remote_logging(args)
+            'experiment': experiment, 'shift_param': shift_param, 'batches': batches_per_experiment, 'log_wandb': LOG_WANDB}
+    if LOG_WANDB:
+        setup_remote_logging(args)
     train_model(exp_args=args)
 
 
 if __name__ == "__main__":
     print("Starting experiments...")
-    # target_graph_sizes = reversed(np.arange(5, 30, 1))
-    target_graph_sizes = [10]
-    # shiftParameter_caseERGeneratorNodes = np.arange(1.0, 2.0, 0.2)
-    # shiftParameter_caseERGeneratorEdges = np.arange(1.0, 2.0, 0.2)
-    # shiftParameter_caseWSGeneratorEccentricity = np.arange(1.0, 2.0, 0.2)
-    shiftParameter_caseERGeneratorNodes = [1.0]
-    shiftParameter_caseERGeneratorEdges = [1.0]
-    shiftParameter_caseWSGeneratorEccentricity = [1.0]
-    experimentRuns = np.arange(1, 2)
+    target_graph_sizes = reversed(np.arange(11, 19, 1))
+    shiftParameter_caseERGeneratorNodes = np.arange(1.0, 2.0, 0.2)
+    shiftParameter_caseERGeneratorEdges = np.arange(1.0, 2.0, 0.2)
+    shiftParameter_caseWSGeneratorEccentricity = np.arange(1.0, 2.0, 0.2)
+    experimentRuns = np.arange(1, 4)
 
     for experiment in experimentRuns:
         for size in target_graph_sizes:
@@ -281,8 +278,11 @@ if __name__ == "__main__":
                     size, shift_param, experiment, True)
                 neg_loader, experiment_name = caseERGeneratorNodes(
                     size, shift_param, experiment, False)
-                train(pos_loader, neg_loader, size,
+                try:
+                    train(pos_loader, neg_loader, size,
                       experiment_name, shift_param)
+                except:
+                    print("Experiment" + str(experiment_name) + "failed.")
                 if 1./shift_param == 1.0:
                     continue
                 print(
@@ -297,30 +297,30 @@ if __name__ == "__main__":
                 except:
                     print("Experiment" + str(experiment_name) + "failed.")
 
-            # for shift_param in shiftParameter_caseERGeneratorEdges:
-            #     print(f"size: {size}, shiftParameter: {shift_param}, edges")
-            #     pos_loader, experiment_name = caseERGeneratorEdges(
-            #         size, shift_param, experiment, True)
-            #     neg_loader, experiment_name = caseERGeneratorEdges(
-            #         size, shift_param, experiment, False)
-            #     try:
-            #         train(pos_loader, neg_loader, size,
-            #               experiment_name, shift_param)
-            #     except:
-            #         print("Experiment" + str(experiment_name) + "failed.")
-            #     if 1./shift_param == 1.0:
-            #         continue
-            #     print(
-            #         f"size: {size}, shiftParameter: {1.0/shift_param}, edges")
-            #     pos_loader, experiment_name = caseERGeneratorEdges(
-            #         size, 1.0/shift_param, experiment, True)
-            #     neg_loader, experiment_name = caseERGeneratorEdges(
-            #         size, 1.0/shift_param, experiment, False)
-            #     try:
-            #         train(pos_loader, neg_loader, size,
-            #               experiment_name, 1.0/shift_param)
-            #     except:
-            #         print("Experiment" + str(experiment_name) + "failed.")
+            for shift_param in shiftParameter_caseERGeneratorEdges:
+                print(f"size: {size}, shiftParameter: {shift_param}, edges")
+                pos_loader, experiment_name = caseERGeneratorEdges(
+                    size, shift_param, experiment, True)
+                neg_loader, experiment_name = caseERGeneratorEdges(
+                    size, shift_param, experiment, False)
+                try:
+                    train(pos_loader, neg_loader, size,
+                          experiment_name, shift_param)
+                except:
+                    print("Experiment" + str(experiment_name) + "failed.")
+                if 1./shift_param == 1.0:
+                    continue
+                print(
+                    f"size: {size}, shiftParameter: {1.0/shift_param}, edges")
+                pos_loader, experiment_name = caseERGeneratorEdges(
+                    size, 1.0/shift_param, experiment, True)
+                neg_loader, experiment_name = caseERGeneratorEdges(
+                    size, 1.0/shift_param, experiment, False)
+                try:
+                    train(pos_loader, neg_loader, size,
+                          experiment_name, 1.0/shift_param)
+                except:
+                    print("Experiment" + str(experiment_name) + "failed.")
 
 
 # edge increase/decrease: increase/decrease the beta distribution by a factor p, so that mean is between [0,1]

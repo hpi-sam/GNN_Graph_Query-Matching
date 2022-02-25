@@ -194,8 +194,8 @@ def get_generator(sizes, size_prob=None, dataset_len=None):
         [
             ERGenerator(sizes, size_prob=size_prob),
             WSGenerator(sizes, size_prob=size_prob),
-            # BAGenerator(sizes, size_prob=size_prob),
-            # PowerLawClusterGenerator(sizes, size_prob=size_prob)
+            BAGenerator(sizes, size_prob=size_prob),
+            PowerLawClusterGenerator(sizes, size_prob=size_prob)
             ],
         # gen_prob=gen_prob,
         dataset_len=dataset_len)
@@ -229,24 +229,18 @@ def get_WSgeneratorEccentricity(sizes, size_prob=None, dataset_len=None, shift_p
     # print(generator)
     return generator
 
-def get_dataset(task, dataset_len, sizes, size_prob=None, **kwargs):
-    generator = get_generator(sizes, size_prob=size_prob,
-        dataset_len=dataset_len)
+def get_dataset(task, dataset_len, sizes, generatorName="ERNODES", size_prob=None, shift_parameter=1.0, **kwargs):
+    if generatorName == "ERNODES":
+        generator = get_ERgeneratorNodes(sizes, size_prob=size_prob,
+                                  dataset_len=dataset_len, shift_parameter=shift_parameter)
+    if generatorName == "EREDGES":
+        generator = get_ERgeneratorEdges(sizes, size_prob=size_prob,
+                                  dataset_len=dataset_len, shift_parameter=shift_parameter)
+    if generatorName == "WSECCENTRICITY":
+        generator = get_WSgeneratorEccentricity(sizes, size_prob=size_prob,
+                                  dataset_len=dataset_len, shift_parameter=shift_parameter)
     return dataset.GraphDataset(
         None, task=task, generator=generator, **kwargs)
-
-# def get_dataset(task, dataset_len, sizes, generatorName="ERNODES", size_prob=None, shift_parameter=1.0, **kwargs):
-#     if generatorName == "ERNODES":
-#         generator = get_ERgeneratorNodes(sizes, size_prob=size_prob,
-#                                   dataset_len=dataset_len, shift_parameter=shift_parameter)
-#     if generatorName == "EREDGES":
-#         generator = get_ERgeneratorEdges(sizes, size_prob=size_prob,
-#                                   dataset_len=dataset_len, shift_parameter=shift_parameter)
-#     if generatorName == "WSECCENTRICITY":
-#         generator = get_WSgeneratorEccentricity(sizes, size_prob=size_prob,
-#                                   dataset_len=dataset_len, shift_parameter=shift_parameter)
-#     return dataset.GraphDataset(
-#         None, task=task, generator=generator, **kwargs)
 
 
 def main():

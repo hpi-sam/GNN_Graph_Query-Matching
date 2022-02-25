@@ -216,6 +216,7 @@ class OTFSynDataSource(DataSource):
         self.max_size = max_size
         self.min_size = min_size
         self.node_anchored = node_anchored
+        #print(node_anchored)
         self.generator = combined_syn.get_generator(np.arange(
             self.min_size + 1, self.max_size + 1))
 

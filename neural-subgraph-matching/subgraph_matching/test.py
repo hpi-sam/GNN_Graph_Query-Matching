@@ -99,7 +99,7 @@ def validation(args, model, test_pts, logger, batch_n, epoch, verbose=False, exp
                                                   acc, prec, recall, auroc, avg_prec, f1,
                                                   tn, fp, fn, tp))
 
-    if exp is not None:
+    if exp is not None and exp['log_wandb']:
         wandb.log({
             "Accuracy/test": acc,
             "Precision/test": prec,
