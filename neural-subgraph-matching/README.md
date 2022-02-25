@@ -1,4 +1,8 @@
-# Installation
+# Installation & Execution of experiments
+NOTE: Running all experiments could take very long, so you might want to adapt the `experiments.py` file first.
+
+For convenience we recommend using Docker to build an image from the Dockerfile in this folder. You just need to run the image afterwards.
+Alternatively you could follow the given steps below:
 
 1. Downgrade to python 3.6.x by using virtual environment (3.6.2 worked for me)
 2. Install freetype, libpng
@@ -6,7 +10,9 @@
 3. `pip install pytest-runner`
 4. `pip install -r requirements.txt`
 5. `pip install -U llvmlite==0.32.1`
+6. `python experiments.py` to start the experiments.
 
+Original ReadMe of the NeuroMatch paper:
 # Neural Subgraph Learning Library
 
 Neural Subgraph Learning (NSL) is a general library that implements various tasks related to
