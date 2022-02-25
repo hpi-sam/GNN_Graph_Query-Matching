@@ -1,0 +1,10 @@
+.git
+wandb/
+plots/
+py38/
+py386/
+runs/
+.env
+.vscode/
+analysis/
+ckpt/
